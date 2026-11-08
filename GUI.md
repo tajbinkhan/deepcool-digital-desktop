@@ -21,9 +21,14 @@ The **Automatic start** section of the window has three settings:
   the device was unplugged) the app tries again every 15 seconds. **Stop display** pauses this for the device
   until you select **Start display** again.
 - **Keep displays running after I close this window** (on by default): closing the window leaves the app
-  running without a window while any display is running or set to start automatically. Open
-  **DeepCool Digital** from the app menu again to show the window; only one copy of the app runs per session.
-  **Stop all and quit** stops every display and exits.
+  running without a window while any display is running or set to start automatically. Click the tray
+  icon, or open **DeepCool Digital** from the app menu again, to show the window; only one copy of the app
+  runs per session. **Stop all and quit** (or **Stop displays and quit** in the tray icon's menu) stops every
+  display and exits.
+- **Tray icon** (`gui/src/tray.rs`): a StatusNotifierItem over D-Bus via the pure-Rust `ksni` crate, so no GTK
+  is needed. Menu choices go through the same request channel as a second launch of the app, and are handled
+  in `App::logic`, which eframe also runs while the window is minimized or covered. If the desktop has no tray
+  (plain GNOME without the AppIndicator extension), the activity log says so and the app works as before.
 - **Start DeepCool Digital in the background when I sign in**: adds
   `~/.config/autostart/deepcool-digital.desktop`, which runs `deepcool-digital-gui --background` when you sign
   in. With no display set to start automatically, that background start simply exits.

@@ -11,6 +11,7 @@ mod cpu_power;
 mod instance;
 mod panel;
 mod png;
+mod tray;
 #[allow(dead_code)] // Parts are used only by the update helper binary.
 mod update;
 mod updater;
@@ -26,6 +27,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use tray::Tray;
 use updater::State as UpdateState;
 
 const SPACING: f32 = 18.0;
@@ -96,6 +98,7 @@ struct App<'a> {
     /// Relaunch after quitting, to run a newly installed version.
     restart: &'a mut bool,
     automation: &'a mut Automation,
+    tray: &'a mut Option<Tray>,
     automated: bool,
     opened: Instant,
 }
@@ -327,7 +330,8 @@ impl App<'_> {
         hint(
             ui,
             "At sign-in the app starts without a window and runs the displays set to start automatically. \
-             Open DeepCool Digital from the app menu to show this window again.",
+             Click the DeepCool Digital icon in the top bar, or open the app from the app menu, to show this \
+             window again. The icon's menu can also stop the displays and quit.",
         );
     }
 
@@ -429,23 +433,39 @@ fn choice(
 }
 
 impl eframe::App for App<'_> {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = ui.ctx().clone();
+    /// Runs before every frame, and also while the window is minimized or covered
+    /// (when `ui` is not called), so tray and quit requests are handled right away.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.panel.poll();
-        self.automation(&ctx);
         let check = self.panel.preferences.check_for_updates;
         self.panel.updater.maybe_check(check);
         if TERMINATE.load(Ordering::SeqCst) {
             *self.quit = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
-        // Another launch of the app asked to see the window.
-        while let Ok(Request::Show) = self.requests.try_recv() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        // Another launch of the app, or the tray icon, asked to see the window or to quit.
+        while let Ok(request) = self.requests.try_recv() {
+            match request {
+                Request::Show => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                }
+                Request::Quit => {
+                    *self.quit = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+        }
+        if let Some(tray) = self.tray.as_mut() {
+            tray.set_running(self.panel.controller.running().len());
         }
         // Controller state can change without output (for example when it is killed).
         ctx.request_repaint_after(Duration::from_millis(500));
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        self.automation(&ctx);
 
         // The whole window scrolls when it is shorter than its contents.
         egui::Frame::central_panel(ui.style()).inner_margin(0.0).show(ui, |ui| {
@@ -595,6 +615,7 @@ fn open_window(
     quit: &mut bool,
     restart: &mut bool,
     automation: &mut Automation,
+    tray: &mut Option<Tray>,
 ) -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -616,6 +637,7 @@ fn open_window(
                 quit,
                 restart,
                 automation,
+                tray,
                 automated,
                 opened: Instant::now(),
             }))
@@ -652,7 +674,7 @@ fn main() {
 
     let waker = Waker::default();
     let (sender, requests) = mpsc::channel();
-    let instance = match Instance::acquire(!background, sender, waker.notify()) {
+    let instance = match Instance::acquire(!background, sender.clone(), waker.notify()) {
         Acquired::Primary(instance) => instance,
         Acquired::AlreadyRunning => {
             println!("DeepCool Digital is already running.");
@@ -663,6 +685,15 @@ fn main() {
     handle_exit_signals();
     let mut panel = Panel::new(waker.notify());
     panel.resume = resume;
+    let mut tray = match Tray::show(sender, waker.notify()) {
+        Ok(tray) => Some(tray),
+        Err(error) => {
+            panel.log(format!(
+                "No system tray icon: {error}. On GNOME, the AppIndicator extension adds tray support."
+            ));
+            None
+        }
+    };
     panel.scan();
     let mut automation = Automation::from_env();
     let mut quit = false;
@@ -674,7 +705,15 @@ fn main() {
     loop {
         if show {
             show = false;
-            if let Err(error) = open_window(&mut panel, &requests, &waker, &mut quit, &mut restart, &mut automation) {
+            if let Err(error) = open_window(
+                &mut panel,
+                &requests,
+                &waker,
+                &mut quit,
+                &mut restart,
+                &mut automation,
+                &mut tray,
+            ) {
                 eprintln!(
                     "No graphical display is available. Open DeepCool Digital from your desktop session. ({error})"
                 );
@@ -683,7 +722,10 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-            while requests.try_recv().is_ok() {}
+            // A request that arrived as the window closed still counts.
+            while let Ok(request) = requests.try_recv() {
+                quit |= request == Request::Quit;
+            }
             if quit || !panel.preferences.run_in_background {
                 break;
             }
@@ -693,15 +735,23 @@ fn main() {
         }
         // Without a window: keep automatic displays running until asked to show the window.
         panel.poll();
+        if let Some(tray) = tray.as_mut() {
+            tray.set_running(panel.controller.running().len());
+        }
         if TERMINATE.load(Ordering::SeqCst) || !panel.has_background_work() {
             break;
         }
         match requests.recv_timeout(Duration::from_millis(500)) {
             Ok(Request::Show) => show = true,
+            Ok(Request::Quit) => {
+                panel.log("Quit from the tray icon.");
+                break;
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => std::thread::sleep(Duration::from_millis(500)),
         }
     }
+    drop(tray);
     if restart {
         restart_app(panel, instance);
     }

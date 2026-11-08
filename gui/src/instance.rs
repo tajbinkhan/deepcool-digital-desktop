@@ -16,6 +16,8 @@ const SHOW: &str = "show";
 #[derive(Debug, PartialEq)]
 pub enum Request {
     Show,
+    /// Stop the displays and exit (from the tray icon's menu).
+    Quit,
 }
 
 pub struct Instance {

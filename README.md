@@ -37,8 +37,8 @@ when you sign in. Everything is written in Rust.
 - **Desktop app** with device discovery, per-device settings and a live activity log. No terminal needed.
 - **Only valid choices**: display modes, rotation, °F, alarm and leading zeros are shown only where the
   selected device supports them.
-- **Runs in the background**: closing the window keeps your displays running. Opening the app again brings
-  the window back; only one copy ever runs.
+- **Runs in the background**: closing the window keeps your displays running. A tray icon brings the window
+  back or quits the app; only one copy ever runs.
 - **Starts automatically**: mark a display to start with its saved settings, and have the app start without
   a window when you sign in. Displays that stop unexpectedly (for example after being unplugged) are retried.
 - **CPU power on the display**: one button (with your administrator password) lets the display show CPU
@@ -143,7 +143,7 @@ The **Automatic start** section of the window controls this:
 | Setting | What it does |
 |---|---|
 | **Start this display automatically** | Per device. Starts the display with its saved settings whenever the app is running, and retries every 15 seconds if it stops unexpectedly. **Stop display** pauses this for that device until you select **Start display** again. |
-| **Keep displays running after I close this window** | On by default. Closing the window leaves the app running without a window. Open **DeepCool Digital** from the app menu to show it again. **Stop all and quit** stops everything and exits. |
+| **Keep displays running after I close this window** | On by default. Closing the window leaves the app running without a window. Click its icon in the top bar (or open **DeepCool Digital** from the app menu) to show it again. **Stop all and quit** stops everything and exits. |
 | **Start DeepCool Digital in the background when I sign in** | Starts the app without a window when you sign in, which then starts the displays marked to start automatically. |
 
 For displays that come on by themselves after every restart, turn on **Start this display automatically**
@@ -156,6 +156,19 @@ signed-in desktop session. If you need the display before anyone signs in, see
 
 The sign-in entry is the file `~/.config/autostart/deepcool-digital.desktop`. It runs
 `deepcool-digital-gui --background`.
+
+### Tray icon
+
+While the app runs, with or without its window, its icon is in the system tray (the top bar on GNOME, the
+panel on KDE and others). Hover over it to see how many displays are running.
+
+- **Left click** or **Open DeepCool Digital** shows the window.
+- **Stop displays and quit** stops every display and exits the app.
+
+Ubuntu's desktop shows tray icons out of the box, and so do KDE Plasma, Cinnamon, XFCE and MATE. Plain GNOME
+(for example on Fedora or Debian) needs the
+[AppIndicator and KStatusNotifierItem Support](https://extensions.gnome.org/extension/615/appindicator-support/)
+extension; without it the app still runs in the background, and you can open it from the app menu.
 
 ## Command-line controller
 
