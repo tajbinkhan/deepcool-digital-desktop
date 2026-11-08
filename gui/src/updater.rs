@@ -88,6 +88,22 @@ fn describe(error: ureq::Error) -> String {
     }
 }
 
+/// Starts downloading `asset`: through GitHub's API first, then the public link.
+fn fetch(agent: &ureq::Agent, asset: &Asset) -> Result<ureq::http::Response<ureq::Body>, String> {
+    let mut error = None;
+    if let Some(api_url) = &asset.api_url {
+        match agent.get(api_url).header("Accept", "application/octet-stream").call() {
+            Ok(response) => return Ok(response),
+            Err(e) => error = Some(e),
+        }
+    }
+    match agent.get(&asset.url).call() {
+        Ok(response) => Ok(response),
+        // Report the API's error when both fail: it is the more telling one.
+        Err(e) => Err(describe(error.unwrap_or(e))),
+    }
+}
+
 /// Asks GitHub for the latest release.
 pub fn fetch_latest(api: &str, installer: Option<Installer>) -> Result<Release, String> {
     let url = format!("{api}/repos/{}/releases/latest", update::REPOSITORY);
@@ -109,10 +125,7 @@ pub fn download(release: &Release, asset: &Asset, dir: &Path, progress: &dyn Fn(
         .as_ref()
         .ok_or("The release has no checksum file, so it can't be verified.")?;
     let agent = agent(Duration::from_secs(15 * 60));
-    let sums = agent
-        .get(&checksums.url)
-        .call()
-        .map_err(describe)?
+    let sums = fetch(&agent, checksums)?
         .body_mut()
         .read_to_string()
         .map_err(|_| "Could not read the checksum file.".to_owned())?;
@@ -128,7 +141,7 @@ pub fn download(release: &Release, asset: &Asset, dir: &Path, progress: &dyn Fn(
     let target = dir.join(&asset.name);
     let partial = dir.join(format!("{}.part", asset.name));
 
-    let response = agent.get(&asset.url).call().map_err(describe)?;
+    let response = fetch(&agent, asset)?;
     let total = response.body().content_length().unwrap_or(asset.size);
     if total > MAX_DOWNLOAD {
         return Err("The update is unexpectedly large; not downloading it.".into());
@@ -400,8 +413,9 @@ mod tests {
         let suffix = Installer::Deb.asset_suffix();
         format!(
             r#"{{"tag_name": "v{version}", "html_url": "{base}/page", "assets": [
-                {{"name": "deepcool-digital-gui_{version}{suffix}", "size": 11, "browser_download_url": "{base}/package"}},
-                {{"name": "SHA256SUMS", "size": 80, "browser_download_url": "{base}/sums"}}]}}"#
+                {{"name": "deepcool-digital-gui_{version}{suffix}", "size": 11, "browser_download_url": "{base}/package",
+                  "url": "{base}/api/package"}},
+                {{"name": "SHA256SUMS", "size": 80, "browser_download_url": "{base}/sums", "url": "{base}/api/sums"}}]}}"#
         )
     }
 
@@ -469,6 +483,37 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn downloads_when_one_route_fails() {
+        let package = b"new version".to_vec();
+        let name = "deepcool-digital-gui_9.0.0_amd64.deb".to_owned();
+        let sums = format!("{}  {name}\n", sha256(&package)).into_bytes();
+        let asset = |server: &str, kind: &str| Asset {
+            name: if kind == "sums" {
+                "SHA256SUMS".into()
+            } else {
+                name.clone()
+            },
+            url: format!("{server}/{kind}"),
+            api_url: Some(format!("{server}/api/{kind}")),
+            size: 1,
+        };
+        // Only the API works (the public links fail, as they did on GitHub), then only the public links.
+        for routes in [["/api/package", "/api/sums"], ["/package", "/sums"]] {
+            let server = serve_with(|_| vec![(routes[0].into(), package.clone()), (routes[1].into(), sums.clone())]);
+            let release = Release {
+                version: "9.0.0".into(),
+                page: String::new(),
+                package: Some(asset(&server, "package")),
+                checksums: Some(asset(&server, "sums")),
+            };
+            let root = temp_dir("fallback");
+            let file = download(&release, release.package.as_ref().unwrap(), &root, &|_, _| {}).unwrap();
+            assert_eq!(fs::read(&file).unwrap(), package, "routes {routes:?}");
+            let _ = fs::remove_dir_all(root);
+        }
+    }
+
     /// A tiny stand-in for GitHub: serves fixed responses by path. `routes` gets the
     /// server's address so responses can link back to it.
     fn serve_with(routes: impl FnOnce(&str) -> Vec<(String, Vec<u8>)>) -> String {
@@ -524,11 +569,13 @@ mod tests {
             package: Some(Asset {
                 name: name.clone(),
                 url: format!("{server}/package"),
+                api_url: None,
                 size: 8,
             }),
             checksums: Some(Asset {
                 name: "SHA256SUMS".into(),
                 url: format!("{server}/sums"),
+                api_url: None,
                 size: 1,
             }),
         };

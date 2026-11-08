@@ -130,7 +130,11 @@ impl Installer {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Asset {
     pub name: String,
+    /// The public download link (`github.com/…/releases/download/…`).
     pub url: String,
+    /// The same file through GitHub's API, which keeps working when the public link
+    /// does not (it has returned 504 errors while the API was fine).
+    pub api_url: Option<String>,
     pub size: u64,
 }
 
@@ -164,6 +168,7 @@ pub fn parse_release(json: &str, installer: Option<Installer>) -> Result<Release
                     Some(Asset {
                         name: asset["name"].as_str()?.to_owned(),
                         url: asset["browser_download_url"].as_str()?.to_owned(),
+                        api_url: asset["url"].as_str().map(str::to_owned),
                         size: asset["size"].as_u64().unwrap_or(0),
                     })
                 })
@@ -220,7 +225,7 @@ mod tests {
             {"name": "deepcool-digital-gui-0.14.0-1-x86_64.pkg.tar.zst", "size": 5, "browser_download_url": "https://x/arch"},
             {"name": "deepcool-digital-gui-0.14.0-1.x86_64.rpm", "size": 6, "browser_download_url": "https://x/rpm"},
             {"name": "deepcool-digital-gui-0.14.0-x86_64.tar.gz", "size": 7, "browser_download_url": "https://x/tar"},
-            {"name": "deepcool-digital-gui_0.14.0_amd64.deb", "size": 8, "browser_download_url": "https://x/deb"},
+            {"name": "deepcool-digital-gui_0.14.0_amd64.deb", "size": 8, "browser_download_url": "https://x/deb", "url": "https://api/deb"},
             {"name": "SHA256SUMS", "size": 9, "browser_download_url": "https://x/sums"}
         ]
     }"#;
@@ -232,7 +237,9 @@ mod tests {
         }
         let deb = parse_release(RELEASE, Some(Installer::Deb)).unwrap();
         assert_eq!(deb.version, "0.14.0");
-        assert_eq!(deb.package.unwrap().url, "https://x/deb");
+        let package = deb.package.unwrap();
+        assert_eq!(package.url, "https://x/deb");
+        assert_eq!(package.api_url.as_deref(), Some("https://api/deb"));
         assert_eq!(deb.checksums.unwrap().url, "https://x/sums");
         assert_eq!(
             parse_release(RELEASE, Some(Installer::Rpm))
