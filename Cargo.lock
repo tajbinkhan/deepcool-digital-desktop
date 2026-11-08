@@ -759,7 +759,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "deepcool-digital-gui"
-version = "0.14.1"
+version = "0.15.0"
 dependencies = [
  "eframe",
  "ksni",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "deepcool-digital-linux"
-version = "0.14.1"
+version = "0.15.0"
 dependencies = [
  "colored",
  "cpu-monitor",
