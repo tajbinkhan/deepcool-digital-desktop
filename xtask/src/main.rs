@@ -16,12 +16,13 @@ use std::{
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 
 const NAME: &str = "deepcool-digital-gui";
-const BINARIES: [&str; 3] = [
+const BINARIES: [&str; 4] = [
     "deepcool-digital-gui",
     "deepcool-digital-linux",
     "deepcool-digital-cpu-power",
+    "deepcool-digital-update",
 ];
-/// Binaries also linked into /usr/bin; the CPU power helper is only run by the app, through polkit.
+/// Binaries also linked into /usr/bin; the helpers are only run by the app, through polkit.
 const COMMANDS: [&str; 2] = ["deepcool-digital-gui", "deepcool-digital-linux"];
 /// Written by the app when the user allows CPU power readings; removed with the package.
 const CPU_POWER_RULE: &str = "/etc/udev/rules.d/71-deepcool-digital-cpu-power.rules";

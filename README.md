@@ -25,6 +25,7 @@ when you sign in. Everything is written in Rust.
 - [Command-line controller](#command-line-controller)
 - [Running as a system service instead](#running-as-a-system-service-instead)
 - [CPU power readings](#cpu-power-readings)
+- [Updates](#updates)
 - [Build from source](#build-from-source)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -42,6 +43,8 @@ when you sign in. Everything is written in Rust.
   a window when you sign in. Displays that stop unexpectedly (for example after being unplugged) are retried.
 - **CPU power on the display**: one button (with your administrator password) lets the display show CPU
   watts on systems that restrict the CPU energy counter.
+- **Updates from inside the app**: the app tells you when a new version is out, then downloads it, verifies
+  its checksum and installs it with your administrator password. Then select **Restart now**.
 - **Several devices at once**, each with its own settings.
 - **No root needed**: packages install udev rules that give your desktop session access to the device.
 - **Packages** for Debian/Ubuntu (`.deb`), Fedora/openSUSE (`.rpm`), Arch (`.pkg.tar.zst`), plus a portable
@@ -113,6 +116,7 @@ The packages install:
 | `/usr/bin/deepcool-digital-gui` | The desktop app (also in your app menu as **DeepCool Digital**) |
 | `/usr/bin/deepcool-digital-linux` | The command-line controller |
 | `/usr/lib/deepcool-digital/deepcool-digital-cpu-power` | Helper the app uses to [allow CPU power readings](#cpu-power-readings) |
+| `/usr/lib/deepcool-digital/deepcool-digital-update` | Helper the app uses to [install updates](#updates) |
 | `/usr/lib/udev/rules.d/70-deepcool-digital.rules` | Gives your desktop session access to DeepCool USB devices |
 
 Requirements: a graphical Linux desktop (Wayland or X11) with OpenGL. No Python, GTK or other runtime is
@@ -290,6 +294,27 @@ sudo /usr/lib/deepcool-digital/deepcool-digital-cpu-power enable
 
 Use `disable` to undo it, or `status` to check.
 
+## Updates
+
+The app's version number is shown at the top of the window and in the **Updates** section.
+
+With **Check for updates automatically** on (the default), the app asks GitHub for the latest release when
+the window opens and every six hours while it stays open. It doesn't check while running in the background
+without a window. You can also select **Check for updates** at any time.
+
+When a newer version is available, a banner appears at the top of the window:
+
+1. Select **Update now**. The app downloads the package for your system (`.deb`, `.rpm` or Arch) and checks
+   it against the release's `SHA256SUMS`.
+2. Enter your administrator password. The helper
+   `/usr/lib/deepcool-digital/deepcool-digital-update` installs it with your package manager (`apt`, `dnf`,
+   `zypper` or `pacman`). It only installs the DeepCool Digital package.
+3. Select **Restart now**. The new version starts, and displays that were running start again.
+
+**What's new** opens the release notes. Portable and source builds can't update themselves; for those,
+**Download…** opens the release page. Downloads are kept in `~/.cache/deepcool-digital/updates` until the
+update is installed.
+
 ## Build from source
 
 The repository is a Cargo workspace:
@@ -455,7 +480,7 @@ Maintainers: see [RELEASING.md](RELEASING.md) for how to publish a new version.
   [deepcool-digital-linux](https://github.com/Nortank12/deepcool-digital-linux): the device controller,
   device support, protocol research and device documentation this project is built on.
 - **[Tajbin Khan](https://github.com/tajbinkhan)**: the desktop app, background and sign-in support,
-  single-instance handling, CPU power access, packaging tool and CPU energy sensor fix.
+  single-instance handling, CPU power access, in-app updates, packaging tool and CPU energy sensor fix.
 
 This project is not affiliated with or endorsed by DeepCool.
 

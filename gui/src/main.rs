@@ -11,6 +11,9 @@ mod cpu_power;
 mod instance;
 mod panel;
 mod png;
+#[allow(dead_code)] // Parts are used only by the update helper binary.
+mod update;
+mod updater;
 
 use eframe::egui::{self, Color32, RichText};
 use instance::{Acquired, Instance, Request};
@@ -23,6 +26,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use updater::State as UpdateState;
 
 const SPACING: f32 = 18.0;
 const USAGE: &str = "Usage: deepcool-digital-gui [--background]
@@ -89,6 +93,8 @@ struct App<'a> {
     panel: &'a mut Panel,
     requests: &'a Receiver<Request>,
     quit: &'a mut bool,
+    /// Relaunch after quitting, to run a newly installed version.
+    restart: &'a mut bool,
     automation: &'a mut Automation,
     automated: bool,
     opened: Instant,
@@ -116,6 +122,122 @@ impl App<'_> {
             *self.quit |= self.automation.smoke_test;
             ctx.request_repaint_after(Duration::from_millis(100));
         }
+    }
+
+    /// Shown at the top while an update is available or being installed.
+    fn update_banner(&mut self, ui: &mut egui::Ui) {
+        let state = self.panel.updater.state.clone();
+        let current = self.panel.updater.current.clone();
+        let fill = ui.visuals().selection.bg_fill.gamma_multiply(0.25);
+        let show = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut egui::Ui)| {
+            egui::Frame::group(ui.style()).fill(fill).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                add(ui);
+            });
+            ui.add_space(SPACING / 2.0);
+        };
+        match state {
+            UpdateState::Available(release) => show(ui, &mut |ui| {
+                ui.label(
+                    RichText::new(format!("Version {} is available. You have version {current}.", release.version))
+                        .strong(),
+                );
+                ui.horizontal(|ui| {
+                    let can_install = self.panel.updater.installer.is_some() && release.package.is_some();
+                    let label = if can_install { "Update now" } else { "Download…" };
+                    let accent = ui.visuals().selection.bg_fill;
+                    let button = egui::Button::new(RichText::new(label).color(Color32::WHITE)).fill(accent);
+                    if ui.add(button).clicked() {
+                        if let Err(error) = self.panel.updater.install() {
+                            self.panel.log(error);
+                        }
+                    }
+                    if ui.button("What's new").clicked() {
+                        if let Err(error) = updater::open_url(&release.page) {
+                            self.panel.log(error);
+                        }
+                    }
+                });
+                if self.panel.updater.installer.is_none() {
+                    hint(
+                        ui,
+                        "This copy wasn't installed from a package, so it can't update itself. \
+                         Download opens the release page.",
+                    );
+                } else if release.package.is_none() {
+                    hint(
+                        ui,
+                        "This release has no package for your system. Download opens the release page.",
+                    );
+                } else {
+                    hint(
+                        ui,
+                        "The update is downloaded, checked, and installed after you enter your password.",
+                    );
+                }
+            }),
+            UpdateState::Downloading { release, done, total } => show(ui, &mut |ui| {
+                ui.label(RichText::new(format!("Downloading version {}…", release.version)).strong());
+                let fraction = if total > 0 { done as f32 / total as f32 } else { 0.0 };
+                ui.add(egui::ProgressBar::new(fraction).show_percentage());
+            }),
+            UpdateState::Installing(release) => show(ui, &mut |ui| {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(RichText::new(format!("Installing version {}…", release.version)).strong());
+                });
+                hint(ui, "Enter your administrator password if asked.");
+            }),
+            UpdateState::Installed(version) => show(ui, &mut |ui| {
+                ui.label(RichText::new(format!("Version {version} is installed.")).strong());
+                ui.horizontal(|ui| {
+                    let accent = ui.visuals().selection.bg_fill;
+                    let button = egui::Button::new(RichText::new("Restart now").color(Color32::WHITE)).fill(accent);
+                    if ui.add(button).clicked() {
+                        *self.restart = true;
+                        *self.quit = true;
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                    ui.label(RichText::new("Running displays start again after the restart.").weak());
+                });
+            }),
+            _ => {}
+        }
+    }
+
+    fn updates_section(&mut self, ui: &mut egui::Ui) {
+        let panel = &mut *self.panel;
+        ui.label(RichText::new("Updates").strong());
+        ui.horizontal(|ui| {
+            ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+            let status = match &panel.updater.state {
+                UpdateState::Checking => "Checking for updates…".to_owned(),
+                UpdateState::UpToDate => "Up to date.".to_owned(),
+                UpdateState::Available(release) => format!("Version {} is available.", release.version),
+                UpdateState::Downloading { .. } | UpdateState::Installing(_) => "Updating…".to_owned(),
+                UpdateState::Installed(version) => format!("Version {version} installed; restart to use it."),
+                UpdateState::Failed(error) => error.clone(),
+                UpdateState::Idle => String::new(),
+            };
+            if matches!(panel.updater.state, UpdateState::Checking) {
+                ui.spinner();
+            }
+            ui.label(RichText::new(status).weak());
+        });
+        if ui
+            .add_enabled(!panel.updater.busy(), egui::Button::new("Check for updates"))
+            .clicked()
+        {
+            panel.updater.check();
+        }
+        let mut automatic = panel.preferences.check_for_updates;
+        if ui.checkbox(&mut automatic, "Check for updates automatically").changed() {
+            panel.set_check_for_updates(automatic);
+        }
+        hint(
+            ui,
+            "Asks GitHub for the latest release when the window opens and every few hours while it is open.",
+        );
     }
 
     fn cpu_power_section(&mut self, ui: &mut egui::Ui) {
@@ -311,6 +433,8 @@ impl eframe::App for App<'_> {
         let ctx = ui.ctx().clone();
         self.panel.poll();
         self.automation(&ctx);
+        let check = self.panel.preferences.check_for_updates;
+        self.panel.updater.maybe_check(check);
         if TERMINATE.load(Ordering::SeqCst) {
             *self.quit = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -331,9 +455,15 @@ impl eframe::App for App<'_> {
                 .show(ui, |ui| {
                     egui::Frame::new().inner_margin(24.0).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 8.0;
-                        ui.label(RichText::new("DeepCool Digital").size(28.0).strong());
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("DeepCool Digital").size(28.0).strong());
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.label(RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION"))).weak());
+                            });
+                        });
                         ui.label("Your hardware. Your display.");
                         ui.add_space(SPACING / 2.0);
+                        self.update_banner(ui);
                         ui.add(egui::Label::new(RichText::new(&self.panel.status).strong()).wrap());
                         ui.add_space(SPACING / 2.0);
 
@@ -428,6 +558,9 @@ impl eframe::App for App<'_> {
                         self.background_section(ui);
                         ui.add_space(SPACING / 2.0);
 
+                        self.updates_section(ui);
+                        ui.add_space(SPACING / 2.0);
+
                         ui.label(RichText::new("Activity").strong());
                         egui::Frame::group(ui.style()).show(ui, |ui| {
                             egui::ScrollArea::vertical()
@@ -460,6 +593,7 @@ fn open_window(
     requests: &Receiver<Request>,
     waker: &Waker,
     quit: &mut bool,
+    restart: &mut bool,
     automation: &mut Automation,
 ) -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -480,6 +614,7 @@ fn open_window(
                 panel,
                 requests,
                 quit,
+                restart,
                 automation,
                 automated,
                 opened: Instant::now(),
@@ -492,7 +627,13 @@ fn open_window(
 
 fn main() {
     let mut background = false;
+    let mut resume = Vec::new();
     for arg in std::env::args().skip(1) {
+        if let Some(list) = arg.strip_prefix("--resume=") {
+            // Used when the app restarts itself after an update.
+            resume = list.split(',').filter_map(|pid| pid.parse::<u32>().ok()).collect();
+            continue;
+        }
         match arg.as_str() {
             "--background" => background = true,
             "-h" | "--help" => {
@@ -511,7 +652,7 @@ fn main() {
 
     let waker = Waker::default();
     let (sender, requests) = mpsc::channel();
-    let _instance = match Instance::acquire(!background, sender, waker.notify()) {
+    let instance = match Instance::acquire(!background, sender, waker.notify()) {
         Acquired::Primary(instance) => instance,
         Acquired::AlreadyRunning => {
             println!("DeepCool Digital is already running.");
@@ -521,9 +662,11 @@ fn main() {
 
     handle_exit_signals();
     let mut panel = Panel::new(waker.notify());
+    panel.resume = resume;
     panel.scan();
     let mut automation = Automation::from_env();
     let mut quit = false;
+    let mut restart = false;
     let mut show = !background;
     if background {
         panel.log("Started in the background.");
@@ -531,7 +674,7 @@ fn main() {
     loop {
         if show {
             show = false;
-            if let Err(error) = open_window(&mut panel, &requests, &waker, &mut quit, &mut automation) {
+            if let Err(error) = open_window(&mut panel, &requests, &waker, &mut quit, &mut restart, &mut automation) {
                 eprintln!(
                     "No graphical display is available. Open DeepCool Digital from your desktop session. ({error})"
                 );
@@ -559,6 +702,28 @@ fn main() {
             Err(RecvTimeoutError::Disconnected) => std::thread::sleep(Duration::from_millis(500)),
         }
     }
+    if restart {
+        restart_app(panel, instance);
+    }
     panel.log("DeepCool Digital closed; stopping its displays.");
     panel.close();
+}
+
+/// Replaces this process with the newly installed version, which starts the
+/// displays that were running again.
+fn restart_app(mut panel: Panel, instance: Instance) -> ! {
+    use std::os::unix::process::CommandExt;
+    let running: Vec<String> = panel.controller.running().iter().map(u32::to_string).collect();
+    panel.log("Restarting DeepCool Digital to finish the update.");
+    panel.close();
+    drop(panel);
+    drop(instance); // Let the new process become the running copy.
+    let app = updater::app_path().unwrap_or_else(|| update::INSTALLED_APP.into());
+    let mut command = std::process::Command::new(&app);
+    if !running.is_empty() {
+        command.arg(format!("--resume={}", running.join(",")));
+    }
+    let error = command.exec();
+    eprintln!("Could not restart DeepCool Digital ({error}). Open it again from the app menu.");
+    std::process::exit(1);
 }

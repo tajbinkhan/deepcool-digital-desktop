@@ -319,12 +319,15 @@ pub fn preferences_path() -> PathBuf {
 pub struct Preferences {
     /// Keep controllers running after the window is closed.
     pub run_in_background: bool,
+    /// Look for new versions on GitHub while the window is open.
+    pub check_for_updates: bool,
 }
 
 impl Default for Preferences {
     fn default() -> Self {
         Preferences {
             run_in_background: true,
+            check_for_updates: true,
         }
     }
 }
@@ -334,19 +337,26 @@ pub fn load_preferences() -> Preferences {
         .ok()
         .and_then(|data| serde_json::from_str::<Value>(&data).ok());
     let defaults = Preferences::default();
-    Preferences {
-        run_in_background: saved
+    let flag = |key: &str, default: bool| {
+        saved
             .as_ref()
-            .and_then(|value| value.get("run_in_background"))
+            .and_then(|value| value.get(key))
             .and_then(Value::as_bool)
-            .unwrap_or(defaults.run_in_background),
+            .unwrap_or(default)
+    };
+    Preferences {
+        run_in_background: flag("run_in_background", defaults.run_in_background),
+        check_for_updates: flag("check_for_updates", defaults.check_for_updates),
     }
 }
 
 pub fn save_preferences(preferences: &Preferences) -> Result<(), String> {
     write_json(
         &preferences_path(),
-        &json!({ "run_in_background": preferences.run_in_background }),
+        &json!({
+            "run_in_background": preferences.run_in_background,
+            "check_for_updates": preferences.check_for_updates,
+        }),
     )
     .map_err(|error| format!("Could not save preferences: {error}"))
 }
@@ -791,11 +801,14 @@ pub(crate) mod tests {
         );
         assert!(!s.autostart);
         assert!(load_preferences().run_in_background, "runs in the background by default");
+        assert!(load_preferences().check_for_updates, "checks for updates by default");
         save_preferences(&Preferences {
             run_in_background: false,
+            check_for_updates: false,
         })
         .unwrap();
         assert!(!load_preferences().run_in_background);
+        assert!(!load_preferences().check_for_updates);
         std::env::remove_var("XDG_CONFIG_HOME");
         let _ = fs::remove_dir_all(dir);
     }

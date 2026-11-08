@@ -61,6 +61,14 @@ restarts running displays. **Turn off** runs `disable`. The rule only calls `chm
 app is removed; the `.deb` and `.rpm` remove it on uninstall. If an older DeepCool system service is running,
 stop/disable it before starting this app to avoid two programs writing to the same USB display.
 
+Updates: the window checks `https://api.github.com/repos/tajbinkhan/deepcool-digital-desktop/releases/latest`
+when it opens and every six hours (if enabled). **Update now** downloads the package matching how the app was
+installed (detected with `dpkg-query`, `rpm` or `pacman`), verifies it against the release's `SHA256SUMS`, and
+runs `/usr/lib/deepcool-digital/deepcool-digital-update install <file>` through polkit (action
+`io.github.tajbinkhan.deepcool-digital.update`). The helper only accepts a regular file containing the
+`deepcool-digital-gui` package in the installed format. **Restart now** replaces the process with the new
+version and passes `--resume=<product IDs>` so running displays start again.
+
 The controller identifies devices by product ID, so two identical devices cannot be addressed separately.
 Unplugged devices require stopping, reconnecting and refreshing.
 
@@ -100,6 +108,10 @@ full panel workflow against a fake controller.
 
 With a supported device connected, `cargo build --release && cargo test -p deepcool-digital-gui -- --ignored`
 starts and stops the real display through the panel.
+
+`cargo test -p deepcool-digital-gui -- --ignored github` checks the real GitHub release and downloads and
+verifies its `.deb` without installing it. `DEEPCOOL_PRETEND_VERSION=0.1.0` makes the app believe it is that
+version, to show the update banner.
 
 `DEEPCOOL_SMOKE_TEST=1 ./target/release/deepcool-digital-gui` opens the real window, waits for device
 discovery and exits. `DEEPCOOL_SCREENSHOT=/path/preview.png` saves a screenshot and then closes the window

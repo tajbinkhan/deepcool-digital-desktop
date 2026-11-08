@@ -17,4 +17,15 @@
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/deepcool-digital/deepcool-digital-cpu-power</annotate>
   </action>
+  <!-- Used by the app's "Update now" button, after the download's checksum is verified. -->
+  <action id="io.github.tajbinkhan.deepcool-digital.update">
+    <description>Install a DeepCool Digital update</description>
+    <message>Authentication is required to install the DeepCool Digital update</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/deepcool-digital/deepcool-digital-update</annotate>
+  </action>
 </policyconfig>

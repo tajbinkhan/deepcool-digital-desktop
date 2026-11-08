@@ -13,6 +13,16 @@ the [release workflow](.github/workflows/release.yml):
 
 Nothing becomes public until you review the draft and publish it.
 
+Once a release is published, installed copies of the app (version 0.14.0 and later) offer it as an update.
+The in-app updater depends on how releases look, so keep these the same:
+
+- tags are `vMAJOR.MINOR.PATCH`,
+- package files are named as the workflow names them (for example `deepcool-digital-gui_0.15.0_amd64.deb`),
+- every release includes `SHA256SUMS`; without it the app refuses to install the update,
+- the release is **published** (not a draft) and **not** marked as a pre-release. GitHub's "latest release",
+  which the app asks for, ignores drafts and pre-releases. Use a pre-release to share a test build without
+  offering it to everyone.
+
 The packages are built inside an Ubuntu 22.04 container, so they need glibc 2.35 or newer and run on
 Ubuntu 22.04+, Debian 12+, Fedora 36+ and Arch. Packages built on a newer machine with `cargo xtask package`
 need that machine's glibc version, so don't upload local builds to a release.
@@ -333,3 +343,4 @@ gh workflow run release.yml --repo tajbinkhan/deepcool-digital-desktop --ref mai
 - [ ] Draft has the five files, checksums verify, `.deb` needs `libc6 (>= 2.35)`
 - [ ] Release notes written and release published
 - [ ] Downloads checked from the public release page
+- [ ] An installed older version (0.14.0 or later) shows the update banner and updates with **Update now**

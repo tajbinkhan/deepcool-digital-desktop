@@ -5,6 +5,7 @@ use crate::core::{
     UPDATE_RANGE,
 };
 use crate::cpu_power::{self, Access};
+use crate::updater::Updater;
 use serde_json::{Map, Value};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -122,6 +123,9 @@ pub struct Panel {
     pub helper: Option<PathBuf>,
     /// Displays being restarted with the same command line once they have stopped.
     restarts: HashMap<u32, Vec<String>>,
+    /// Displays to start with their saved settings once found (after the app restarts itself).
+    pub resume: Vec<u32>,
+    pub updater: Updater,
     log_file: ActivityLog,
     output: Receiver<(u32, String)>,
     discovery: Option<Receiver<Discovery>>,
@@ -159,6 +163,8 @@ impl Panel {
             privileged: vec!["pkexec".into()],
             helper: None,
             restarts: HashMap::new(),
+            resume: Vec::new(),
+            updater: Updater::new(notify.clone()),
             log_file,
             output,
             discovery: None,
@@ -228,6 +234,9 @@ impl Panel {
         if let Some(result) = self.cpu_power_job.as_ref().and_then(|job| job.try_recv().ok()) {
             self.cpu_power_job = None;
             self.cpu_power_changed(result);
+        }
+        for message in self.updater.poll() {
+            self.log(message);
         }
         self.controller.enforce_stops();
         self.finish_restarts();
@@ -376,7 +385,18 @@ impl Panel {
     fn keep_alive(&mut self) {
         let now = Instant::now();
         let mut missing = false;
-        for pid in self.automatic_devices() {
+        let mut wanted = self.automatic_devices();
+        wanted.extend(
+            self.resume
+                .iter()
+                .filter(|pid| !wanted.contains(pid))
+                .copied()
+                .collect::<Vec<_>>(),
+        );
+        for pid in wanted {
+            if self.controller.is_running(pid) {
+                self.resume.retain(|resumed| *resumed != pid);
+            }
             if self.paused.contains(&pid) || self.restarts.contains_key(&pid) || self.controller.is_running(pid) {
                 continue;
             }
@@ -393,9 +413,14 @@ impl Panel {
             }
             self.last_attempt.insert(pid, now);
             let settings = self.saved(pid);
-            self.log(format!("Starting display {pid} automatically with its saved settings."));
-            if let Err(error) = self.launch(pid, &settings) {
-                self.log(format!("Could not start display {pid} automatically: {error}"));
+            if self.resume.contains(&pid) {
+                self.log(format!("Starting display {pid} again after the restart."));
+            } else {
+                self.log(format!("Starting display {pid} automatically with its saved settings."));
+            }
+            match self.launch(pid, &settings) {
+                Ok(()) => self.resume.retain(|resumed| *resumed != pid),
+                Err(error) => self.log(format!("Could not start display {pid} automatically: {error}")),
             }
         }
         let due = self
@@ -486,6 +511,18 @@ impl Panel {
     pub fn set_run_in_background(&mut self, enabled: bool) {
         let preferences = core::Preferences {
             run_in_background: enabled,
+            ..self.preferences.clone()
+        };
+        match core::save_preferences(&preferences) {
+            Ok(()) => self.preferences = preferences,
+            Err(error) => self.log(error),
+        }
+    }
+
+    pub fn set_check_for_updates(&mut self, enabled: bool) {
+        let preferences = core::Preferences {
+            check_for_updates: enabled,
+            ..self.preferences.clone()
         };
         match core::save_preferences(&preferences) {
             Ok(()) => self.preferences = preferences,
