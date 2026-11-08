@@ -427,8 +427,12 @@ belongs in the controller (`src/`); consider sending it to the
 Before opening a pull request:
 
 ```bash
-cargo fmt --all && cargo clippy --workspace --all-targets && cargo test --workspace
+cargo fmt -p deepcool-digital-gui -p xtask && cargo clippy --workspace --all-targets && cargo test --workspace
 ```
+
+The controller in `src/` keeps the original project's formatting so upstream changes stay easy to merge.
+
+Maintainers: see [RELEASING.md](RELEASING.md) for how to publish a new version.
 
 ## Credits
 

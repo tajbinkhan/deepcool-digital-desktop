@@ -81,7 +81,7 @@ implied.
 
 Releases are built by GitHub Actions (`.github/workflows/release.yml`): pushing a tag such as `v0.12.0` that
 matches the version in `gui/Cargo.toml` builds deb, rpm, Arch and tar.gz packages in Ubuntu 22.04
-(glibc 2.35) and attaches them to a draft release to review and publish.
+(glibc 2.35) and attaches them to a draft release to review and publish. Step-by-step instructions are in [RELEASING.md](RELEASING.md).
 
 These formats cover major distribution families, not every Linux release. Native libraries impose minimum
 versions. Build on the oldest intended distribution and validate on each supported target before publishing.
