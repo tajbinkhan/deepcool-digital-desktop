@@ -1,0 +1,23 @@
+[workspace]
+members = [".", "gui", "xtask"]
+default-members = [".", "gui"]
+resolver = "2"
+
+[package]
+name = "deepcool-digital-linux"
+version = "0.12.0"
+edition = "2021"
+description = "Controller for the digital displays of DeepCool CPU coolers and cases"
+license = "GPL-3.0-only"
+repository = "https://github.com/tajbinkhan/deepcool-digital-desktop"
+
+[dependencies]
+libloading = "0.9.0"
+hidapi = "2.6.7"
+cpu-monitor = "0.1.1"
+colored = "3.1.1"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = "symbols"

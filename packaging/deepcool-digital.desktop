@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DeepCool Digital
+Comment=Control your DeepCool USB display
+Exec=deepcool-digital-gui
+Icon=deepcool-digital
+Terminal=false
+Categories=Settings;HardwareSettings;
+StartupNotify=true
+StartupWMClass=deepcool-digital
