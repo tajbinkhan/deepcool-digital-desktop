@@ -79,6 +79,10 @@ runtime matching the build architecture. The package version comes from `gui/Car
 SHA-256 checksums are in `dist/`. The builder uses the host CPU architecture; cross-compilation is not
 implied.
 
+Releases are built by GitHub Actions (`.github/workflows/release.yml`): pushing a tag such as `v0.12.0` that
+matches the version in `gui/Cargo.toml` builds deb, rpm, Arch and tar.gz packages in Ubuntu 22.04
+(glibc 2.35) and attaches them to a draft release to review and publish.
+
 These formats cover major distribution families, not every Linux release. Native libraries impose minimum
 versions. Build on the oldest intended distribution and validate on each supported target before publishing.
 Flatpak and Snap are not supplied: sandboxed USB/raw HID access and system udev rule installation require

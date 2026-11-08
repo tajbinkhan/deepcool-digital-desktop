@@ -1,0 +1,71 @@
+# Builds Linux packages when a version tag (for example v0.12.0) is pushed and attaches
+# them to a draft GitHub release. Review the draft, then publish it.
+#
+# Packages are built inside Ubuntu 22.04 so they link against glibc 2.35 and run on
+# Ubuntu 22.04+, Debian 12+, Fedora 36+, Arch and other distributions of that age or newer.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - name: Install build tools
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential pkg-config libudev-dev curl ca-certificates git \
+            dpkg-dev rpm zstd file binutils
+
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' gui/Cargo.toml | head -n1)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match gui/Cargo.toml version $version"; exit 1; }
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Build packages
+        run: cargo xtask package --formats deb,rpm,arch,tar
+
+      - name: Show glibc requirement
+        run: |
+          for binary in target/release/deepcool-digital-gui target/release/deepcool-digital-linux; do
+            echo "$binary: $(objdump -T "$binary" | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -n1)"
+          done
+          cat dist/SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/
+
+      - name: Attach packages to a draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+            dist/*.tar.gz
+            dist/SHA256SUMS
