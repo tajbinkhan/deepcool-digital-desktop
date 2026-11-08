@@ -369,7 +369,7 @@ pub fn autostart_entry(executable: &str) -> Result<String, String> {
     ))
 }
 
-fn is_executable(path: &Path) -> bool {
+pub fn is_executable(path: &Path) -> bool {
     path.is_file()
         && CString::new(path.as_os_str().as_bytes())
             .is_ok_and(|path| unsafe { libc::access(path.as_ptr(), libc::X_OK) } == 0)
@@ -456,6 +456,7 @@ pub fn run_with_timeout(args: &[String], timeout: Duration) -> Result<(bool, Str
 struct Process {
     child: Arc<Mutex<Child>>,
     stop_deadline: Option<Instant>,
+    args: Vec<String>,
 }
 
 /// One controller child per product ID. Never invokes a shell.
@@ -479,6 +480,11 @@ impl Controller {
         self.processes
             .get(&pid)
             .is_some_and(|process| matches!(process.child.lock().unwrap().try_wait(), Ok(None)))
+    }
+
+    /// The command line a controller was last started with.
+    pub fn args(&self, pid: u32) -> Option<Vec<String>> {
+        self.processes.get(&pid).map(|process| process.args.clone())
     }
 
     /// Product IDs whose controller is currently running.
@@ -540,6 +546,7 @@ impl Controller {
             Process {
                 child,
                 stop_deadline: None,
+                args: args.to_vec(),
             },
         );
         Ok(())

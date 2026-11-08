@@ -40,6 +40,8 @@ when you sign in. Everything is written in Rust.
   the window back; only one copy ever runs.
 - **Starts automatically**: mark a display to start with its saved settings, and have the app start without
   a window when you sign in. Displays that stop unexpectedly (for example after being unplugged) are retried.
+- **CPU power on the display**: one button (with your administrator password) lets the display show CPU
+  watts on systems that restrict the CPU energy counter.
 - **Several devices at once**, each with its own settings.
 - **No root needed**: packages install udev rules that give your desktop session access to the device.
 - **Packages** for Debian/Ubuntu (`.deb`), Fedora/openSUSE (`.rpm`), Arch (`.pkg.tar.zst`), plus a portable
@@ -110,6 +112,7 @@ The packages install:
 |---|---|
 | `/usr/bin/deepcool-digital-gui` | The desktop app (also in your app menu as **DeepCool Digital**) |
 | `/usr/bin/deepcool-digital-linux` | The command-line controller |
+| `/usr/lib/deepcool-digital/deepcool-digital-cpu-power` | Helper the app uses to [allow CPU power readings](#cpu-power-readings) |
 | `/usr/lib/udev/rules.d/70-deepcool-digital.rules` | Gives your desktop session access to DeepCool USB devices |
 
 Requirements: a graphical Linux desktop (Wayland or X11) with OpenGL. No Python, GTK or other runtime is
@@ -261,20 +264,31 @@ original project; see its [README](https://github.com/Nortank12/deepcool-digital
 
 ## CPU power readings
 
-Showing CPU power (watts) needs read access to the CPU energy counter, for example
-`/sys/class/powercap/intel-rapl:0/energy_uj`. Most distributions make it readable only by root. Without it,
-the display runs normally and leaves CPU power out; the activity log says
-`No supported CPU energy sensor was found`.
+Displays that show CPU power (watts) need to read the CPU's energy counter, for example
+`/sys/class/powercap/intel-rapl:0/energy_uj`. Most distributions let only root read it, so by default the
+display shows 0 W. The **CPU power** section of the app tells you which case applies:
 
-To allow it, an administrator can add a udev rule such as
-`/etc/udev/rules.d/71-deepcool-rapl.rules`:
+- **CPU power readings are available**: nothing to do.
+- **Only administrators can read the CPU energy counter**: select **Allow CPU power readings…** and enter
+  your administrator password. The app makes the counter readable now and after every restart, and restarts
+  running displays so they show CPU power. **Turn off** in the same place restores the default.
+- **No supported CPU energy sensor**: your kernel exposes none of the supported counters (`intel_rapl`,
+  `amd_energy` or `zenergy`), so CPU power can't be shown.
 
+Allowing it makes the energy counter readable by every user on the computer. Linux restricts it because
+precise energy readings have been used in side-channel attacks
+([CVE-2020-8694](https://nvd.nist.gov/vuln/detail/CVE-2020-8694)); on a personal computer the risk is low.
+
+Behind the button, the helper `/usr/lib/deepcool-digital/deepcool-digital-cpu-power` runs as root through
+polkit. It writes `/etc/udev/rules.d/71-deepcool-digital-cpu-power.rules` and changes the counters'
+permissions. Uninstalling the `.deb` or `.rpm` removes that rule. Without polkit (or from the portable
+build), run it yourself:
+
+```bash
+sudo /usr/lib/deepcool-digital/deepcool-digital-cpu-power enable
 ```
-ACTION=="add", SUBSYSTEM=="powercap", KERNEL=="intel-rapl:0", RUN+="/bin/chmod 444 /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj"
-```
 
-Then reboot. This makes the energy counter readable by all users, which has been used in side-channel
-attacks, so only do this if you accept that trade-off. The packages deliberately don't change it.
+Use `disable` to undo it, or `status` to check.
 
 ## Build from source
 
@@ -408,9 +422,10 @@ More details about the app, packaging and test hooks are in [GUI.md](GUI.md).
 Another program may also be driving it. Stop any `deepcool-digital` system service
 (`sudo systemctl disable --now deepcool-digital`) and any other copy of the controller.
 
-#### CPU power is missing
+#### CPU power shows 0 W
 
-See [CPU power readings](#cpu-power-readings).
+Use **Allow CPU power readings…** in the app; see [CPU power readings](#cpu-power-readings). If the
+password prompt doesn't appear, check that polkit is installed (`pkexec` on Debian and Ubuntu).
 
 #### Where are the logs?
 
@@ -440,7 +455,7 @@ Maintainers: see [RELEASING.md](RELEASING.md) for how to publish a new version.
   [deepcool-digital-linux](https://github.com/Nortank12/deepcool-digital-linux): the device controller,
   device support, protocol research and device documentation this project is built on.
 - **[Tajbin Khan](https://github.com/tajbinkhan)**: the desktop app, background and sign-in support,
-  single-instance handling, packaging tool and CPU energy sensor fix.
+  single-instance handling, CPU power access, packaging tool and CPU energy sensor fix.
 
 This project is not affiliated with or endorsed by DeepCool.
 

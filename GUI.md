@@ -52,10 +52,14 @@ administrator must install them to the system udev rules directory and reload ru
 as root.
 
 CPU power readings need read access to the CPU energy counter (for example
-`/sys/class/powercap/intel-rapl:0/energy_uj`), which is usually root-only; see the main README. Without it,
-the display runs and simply leaves CPU power out. This package does not change those permissions. If an older
-DeepCool system service is running, stop/disable it before starting this app to avoid two programs writing
-to the same USB display.
+`/sys/class/powercap/intel-rapl:0/energy_uj`), which is usually root-only. The **CPU power** section of the
+window shows whether it is readable and offers **Allow CPU power readings…**, which runs
+`/usr/lib/deepcool-digital/deepcool-digital-cpu-power enable` as root through polkit (`pkexec`, policy
+`io.github.tajbinkhan.deepcool-digital.cpu-power`). The helper writes
+`/etc/udev/rules.d/71-deepcool-digital-cpu-power.rules`, makes the counters readable immediately, and the app
+restarts running displays. **Turn off** runs `disable`. The rule only calls `chmod`, so it is harmless if the
+app is removed; the `.deb` and `.rpm` remove it on uninstall. If an older DeepCool system service is running,
+stop/disable it before starting this app to avoid two programs writing to the same USB display.
 
 The controller identifies devices by product ID, so two identical devices cannot be addressed separately.
 Unplugged devices require stopping, reconnecting and refreshing.

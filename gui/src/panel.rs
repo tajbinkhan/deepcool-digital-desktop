@@ -4,9 +4,12 @@ use crate::core::{
     self, capabilities, is_supported, ActivityLog, Controller, Preferences, Settings, DEVICE_DEFAULT, ROTATIONS,
     UPDATE_RANGE,
 };
+use crate::cpu_power::{self, Access};
 use serde_json::{Map, Value};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    path::PathBuf,
+    process::Command,
     sync::{
         mpsc::{self, Receiver},
         Arc,
@@ -104,6 +107,21 @@ pub struct Panel {
     quiet_scan: bool,
     /// How long to wait before retrying an automatic display (shortened in tests).
     pub retry_interval: Duration,
+    /// Whether the display can show CPU power.
+    pub cpu_power: Access,
+    /// The app's rule that makes CPU power readable is installed.
+    pub cpu_power_rule: bool,
+    /// Waiting for the administrator prompt or the helper to finish.
+    pub cpu_power_busy: bool,
+    cpu_power_job: Option<Receiver<Result<String, String>>>,
+    /// The system to inspect ("/"; a fake folder in tests).
+    pub system_root: PathBuf,
+    /// Runs the helper as root; the helper's command is appended.
+    pub privileged: Vec<String>,
+    /// The helper to run; `None` finds it next to this program.
+    pub helper: Option<PathBuf>,
+    /// Displays being restarted with the same command line once they have stopped.
+    restarts: HashMap<u32, Vec<String>>,
     log_file: ActivityLog,
     output: Receiver<(u32, String)>,
     discovery: Option<Receiver<Discovery>>,
@@ -133,6 +151,14 @@ impl Panel {
             last_scan: None,
             quiet_scan: false,
             retry_interval: RETRY_INTERVAL,
+            cpu_power: Access::NoSensor,
+            cpu_power_rule: false,
+            cpu_power_busy: false,
+            cpu_power_job: None,
+            system_root: PathBuf::from("/"),
+            privileged: vec!["pkexec".into()],
+            helper: None,
+            restarts: HashMap::new(),
             log_file,
             output,
             discovery: None,
@@ -142,6 +168,7 @@ impl Panel {
         if panel.sign_in {
             panel.set_sign_in(true);
         }
+        panel.refresh_cpu_power();
         panel
     }
 
@@ -198,7 +225,12 @@ impl Panel {
             self.discovery = None;
             self.discovered(found);
         }
+        if let Some(result) = self.cpu_power_job.as_ref().and_then(|job| job.try_recv().ok()) {
+            self.cpu_power_job = None;
+            self.cpu_power_changed(result);
+        }
         self.controller.enforce_stops();
+        self.finish_restarts();
         self.keep_alive();
         self.update_status();
     }
@@ -345,7 +377,7 @@ impl Panel {
         let now = Instant::now();
         let mut missing = false;
         for pid in self.automatic_devices() {
-            if self.paused.contains(&pid) || self.controller.is_running(pid) {
+            if self.paused.contains(&pid) || self.restarts.contains_key(&pid) || self.controller.is_running(pid) {
                 continue;
             }
             if !self.devices.iter().any(|(known, _)| *known == pid) {
@@ -490,7 +522,119 @@ impl Panel {
     }
 
     pub fn close(&mut self) {
+        self.restarts.clear();
         self.controller.close();
+    }
+
+    pub fn refresh_cpu_power(&mut self) {
+        self.cpu_power = cpu_power::access(&self.system_root);
+        self.cpu_power_rule = cpu_power::rule_installed(&self.system_root);
+    }
+
+    /// The helper that changes CPU power access, installed next to this program.
+    fn cpu_power_helper() -> Result<PathBuf, String> {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let helper = exe.with_file_name(cpu_power::HELPER_NAME);
+        if core::is_executable(&helper) {
+            Ok(helper)
+        } else {
+            Err(format!(
+                "The {} helper is missing. Reinstall DeepCool Digital.",
+                cpu_power::HELPER_NAME
+            ))
+        }
+    }
+
+    /// Allows (or restricts again) CPU power readings. Asks for an administrator password.
+    pub fn set_cpu_power(&mut self, allow: bool) {
+        if self.cpu_power_busy {
+            return;
+        }
+        let helper = match self.helper.clone().map_or_else(Self::cpu_power_helper, Ok) {
+            Ok(helper) => helper,
+            Err(error) => return self.log(error),
+        };
+        let mut command: Vec<String> = self.privileged.clone();
+        command.push(helper.to_string_lossy().into_owned());
+        command.push(if allow { "enable" } else { "disable" }.into());
+        self.cpu_power_busy = true;
+        self.log(if allow {
+            "Asking for permission to read CPU power…"
+        } else {
+            "Asking for permission to turn off CPU power readings…"
+        });
+        let (sender, receiver) = mpsc::channel();
+        let notify = self.notify.clone();
+        thread::spawn(move || {
+            let result = match Command::new(&command[0]).args(&command[1..]).output() {
+                Ok(output) if output.status.success() => Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned()),
+                // pkexec: 126 when the prompt is dismissed, 127 when not authorised.
+                Ok(output) if output.status.code() == Some(126) => {
+                    Err("Cancelled: the password prompt was closed.".into())
+                }
+                Ok(output) if output.status.code() == Some(127) => {
+                    Err("Not allowed: an administrator password is needed to change this.".into())
+                }
+                Ok(output) => Err(format!(
+                    "Could not change CPU power access: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                )),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(format!(
+                    "{} is not installed. Install polkit, or run: sudo {} {}",
+                    command[0],
+                    command[command.len() - 2],
+                    command[command.len() - 1]
+                )),
+                Err(error) => Err(format!("Could not ask for permission: {error}")),
+            };
+            let _ = sender.send(result);
+            notify();
+        });
+        self.cpu_power_job = Some(receiver);
+    }
+
+    fn cpu_power_changed(&mut self, result: Result<String, String>) {
+        self.cpu_power_busy = false;
+        let before = self.cpu_power;
+        self.refresh_cpu_power();
+        match result {
+            Ok(message) => {
+                if !message.is_empty() {
+                    self.log(message);
+                }
+                // The controller looks for the energy counter when it starts.
+                if before != self.cpu_power {
+                    self.restart_running();
+                }
+            }
+            Err(error) => self.log(error),
+        }
+    }
+
+    /// Restarts every running display with the same settings.
+    pub fn restart_running(&mut self) {
+        for pid in self.controller.running() {
+            if let Some(args) = self.controller.args(pid) {
+                self.log(format!("Restarting display {pid} to apply the change."));
+                self.restarts.insert(pid, args);
+                self.controller.stop(pid);
+            }
+        }
+    }
+
+    fn finish_restarts(&mut self) {
+        let stopped: Vec<u32> = self
+            .restarts
+            .keys()
+            .copied()
+            .filter(|pid| !self.controller.is_running(*pid))
+            .collect();
+        for pid in stopped {
+            let args = self.restarts.remove(&pid).unwrap();
+            if let Err(error) = self.controller.start(pid, &args) {
+                self.log(format!("Could not restart display {pid}: {error}"));
+            }
+        }
     }
 }
 
@@ -704,6 +848,101 @@ mod tests {
         // The background preference is saved.
         next.set_run_in_background(false);
         assert!(!core::load_preferences().run_in_background);
+        for variable in ["DEEPCOOL_BACKEND", "XDG_CONFIG_HOME", "XDG_STATE_HOME"] {
+            std::env::remove_var(variable);
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn allowing_cpu_power_restarts_running_displays() {
+        if unsafe { libc::geteuid() } == 0 {
+            eprintln!("skipped: root can read restricted files, so access never changes");
+            return;
+        }
+        let _guard = ENV.lock().unwrap();
+        let root = temp_dir("cpu-power");
+        let counter = root.join("system/sys/class/powercap/intel-rapl:0/energy_uj");
+        fs::create_dir_all(counter.parent().unwrap()).unwrap();
+        fs::write(&counter, "1000\n").unwrap();
+        // Real counters are root-owned with mode 0400; this file is ours, so use 000 to make it unreadable.
+        fs::set_permissions(&counter, fs::Permissions::from_mode(0o000)).unwrap();
+        let script = |name: &str, body: &str| {
+            let path = root.join(name);
+            fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        let backend = script("backend", "echo \"Display streaming $*\"; exec sleep 30");
+        // Stands in for `pkexec helper enable|disable`, acting on the fake system.
+        let prompt = script(
+            "prompt",
+            &format!(
+                "case \"$2\" in\n enable) chmod 444 '{c}'; mkdir -p '{r}'; touch '{r}/71-deepcool-digital-cpu-power.rules'; \
+                 echo 'CPU power readings allowed (1 counter(s)).';;\n disable) chmod 000 '{c}'; rm -f '{r}'/*; \
+                 echo 'CPU power readings restricted (1 counter(s)).';;\nesac",
+                c = counter.display(),
+                r = root.join("system/etc/udev/rules.d").display()
+            ),
+        );
+        let cancelled = script("cancelled", "exit 126");
+        std::env::set_var("DEEPCOOL_BACKEND", &backend);
+        std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+        std::env::set_var("XDG_STATE_HOME", root.join("state"));
+
+        let mut panel = Panel::new(Arc::new(|| {}));
+        panel.system_root = root.join("system");
+        panel.helper = Some(root.join("helper"));
+        panel.refresh_cpu_power();
+        assert_eq!(panel.cpu_power, Access::Restricted);
+        panel.discovered(Discovery {
+            devices: vec![(10, "LD-Series".into())],
+            ..Default::default()
+        });
+        panel.start();
+        let wait = |panel: &mut Panel, done: &dyn Fn(&Panel) -> bool| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !done(panel) && Instant::now() < deadline {
+                panel.poll();
+                thread::sleep(Duration::from_millis(10));
+            }
+            assert!(done(panel), "timed out; activity: {:#?}", panel.activity);
+        };
+        let streams = |p: &Panel| {
+            p.activity
+                .iter()
+                .filter(|l| l.starts_with("[10] Display streaming"))
+                .count()
+        };
+        wait(&mut panel, &|p| streams(p) == 1);
+
+        // A closed password prompt changes nothing.
+        panel.privileged = vec![cancelled.to_string_lossy().into_owned()];
+        panel.set_cpu_power(true);
+        assert!(panel.cpu_power_busy);
+        wait(&mut panel, &|p| !p.cpu_power_busy);
+        assert!(panel.activity.iter().any(|l| l.starts_with("Cancelled")));
+        assert_eq!(panel.cpu_power, Access::Restricted);
+
+        // Allowing it makes CPU power readable and restarts the running display.
+        panel.privileged = vec![prompt.to_string_lossy().into_owned()];
+        panel.set_cpu_power(true);
+        wait(&mut panel, &|p| !p.cpu_power_busy);
+        assert_eq!(panel.cpu_power, Access::Readable);
+        assert!(panel.cpu_power_rule);
+        wait(&mut panel, &|p| streams(p) == 2 && p.is_running());
+        assert!(panel
+            .activity
+            .iter()
+            .any(|l| l == "Restarting display 10 to apply the change."));
+
+        // Turning it off restores the default.
+        panel.set_cpu_power(false);
+        wait(&mut panel, &|p| !p.cpu_power_busy);
+        assert_eq!(panel.cpu_power, Access::Restricted);
+        assert!(!panel.cpu_power_rule);
+
+        panel.close();
         for variable in ["DEEPCOOL_BACKEND", "XDG_CONFIG_HOME", "XDG_STATE_HOME"] {
             std::env::remove_var(variable);
         }

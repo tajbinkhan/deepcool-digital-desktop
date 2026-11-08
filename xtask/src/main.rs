@@ -16,7 +16,15 @@ use std::{
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 
 const NAME: &str = "deepcool-digital-gui";
-const BINARIES: [&str; 2] = ["deepcool-digital-gui", "deepcool-digital-linux"];
+const BINARIES: [&str; 3] = [
+    "deepcool-digital-gui",
+    "deepcool-digital-linux",
+    "deepcool-digital-cpu-power",
+];
+/// Binaries also linked into /usr/bin; the CPU power helper is only run by the app, through polkit.
+const COMMANDS: [&str; 2] = ["deepcool-digital-gui", "deepcool-digital-linux"];
+/// Written by the app when the user allows CPU power readings; removed with the package.
+const CPU_POWER_RULE: &str = "/etc/udev/rules.d/71-deepcool-digital-cpu-power.rules";
 const FORMATS: [&str; 5] = ["deb", "rpm", "arch", "tar", "appimage"];
 const USAGE: &str = "\
 Usage: cargo xtask package [OPTIONS]
@@ -270,6 +278,8 @@ impl Packager {
         // The GUI finds the controller next to its own resolved path.
         for name in BINARIES {
             copy(&self.root.join("target/release").join(name), &app.join(name))?;
+        }
+        for name in COMMANDS {
             let link = stage.join("usr/bin").join(name);
             fs::create_dir_all(link.parent().unwrap())?;
             symlink(format!("../lib/deepcool-digital/{name}"), link)?;
@@ -287,6 +297,10 @@ impl Packager {
             (
                 packaging.join("70-deepcool-digital.rules"),
                 "usr/lib/udev/rules.d/70-deepcool-digital.rules",
+            ),
+            (
+                packaging.join("io.github.tajbinkhan.deepcool-digital.policy"),
+                "usr/share/polkit-1/actions/io.github.tajbinkhan.deepcool-digital.policy",
             ),
             (self.root.join("LICENSE"), "usr/share/licenses/deepcool-digital-gui/LICENSE"),
             (self.root.join("GUI.md"), "usr/share/doc/deepcool-digital-gui/GUI.md"),
@@ -344,7 +358,7 @@ impl Packager {
             format!(
                 "Package: {NAME}\nVersion: {}\nArchitecture: {}\n\
                  Maintainer: DeepCool Digital contributors <noreply@example.org>\n\
-                 Depends: {dependencies}, {DEB_RUNTIME}\nRecommends: udev\nSection: utils\nPriority: optional\n\
+                 Depends: {dependencies}, {DEB_RUNTIME}\nRecommends: udev, pkexec | policykit-1\nSection: utils\nPriority: optional\n\
                  Description: Native desktop controller for DeepCool Digital USB displays\n",
                 self.version, self.arch
             ),
@@ -355,7 +369,10 @@ impl Packager {
         )?;
         write_executable(
             &control.join("postrm"),
-            "#!/bin/sh\nset -e\nif command -v udevadm >/dev/null 2>&1; then udevadm control --reload-rules || true; fi\n",
+            &format!(
+                "#!/bin/sh\nset -e\nif [ \"$1\" = remove ] || [ \"$1\" = purge ]; then rm -f {CPU_POWER_RULE}; fi\n\
+                 if command -v udevadm >/dev/null 2>&1; then udevadm control --reload-rules || true; fi\n"
+            ),
         )?;
         let package = self.out.join(format!("{NAME}_{}_{}.deb", self.version, self.arch));
         run("dpkg-deb", &[&"--root-owner-group", &"--build", &stage, &package], None)?;
@@ -380,15 +397,17 @@ impl Packager {
             format!(
                 "Name: {NAME}\nVersion: {version}\nRelease: 1\n\
                  Summary: Desktop control panel for DeepCool Digital USB displays\n\
-                 License: GPL-3.0-only\nRequires: {requires}\n\
+                 License: GPL-3.0-only\nRequires: {requires}\nRecommends: polkit\n\
                  %description\nNative desktop control panel with device discovery and saved settings.\n\
                  %prep\n%build\n%install\nmkdir -p %{{buildroot}}\ncp -a {stage}/usr %{{buildroot}}/\n\
                  %files\n/usr/bin/deepcool-digital-gui\n/usr/bin/deepcool-digital-linux\n/usr/lib/deepcool-digital\n\
                  /usr/lib/udev/rules.d/70-deepcool-digital.rules\n/usr/share/applications/deepcool-digital.desktop\n\
                  /usr/share/icons/hicolor/scalable/apps/deepcool-digital.svg\n/usr/share/licenses/deepcool-digital-gui\n\
                  /usr/share/doc/deepcool-digital-gui\n\
+                 /usr/share/polkit-1/actions/io.github.tajbinkhan.deepcool-digital.policy\n\
                  %post\n{refresh}\
-                 %postun\nif command -v udevadm >/dev/null 2>&1; then udevadm control --reload-rules || :; fi\n",
+                 %postun\nif [ \"$1\" -eq 0 ]; then rm -f {CPU_POWER_RULE}; fi\n\
+                 if command -v udevadm >/dev/null 2>&1; then udevadm control --reload-rules || :; fi\n",
                 version = self.version,
                 requires = requires.join(", "),
                 stage = stage.display(),
@@ -438,7 +457,8 @@ impl Packager {
         let mut info = format!(
             "pkgname = {NAME}\npkgbase = {NAME}\npkgver = {}-1\n\
              pkgdesc = Desktop controller for DeepCool Digital USB displays\nsize = {size}\narch = {}\n\
-             license = GPL-3.0-only\ndepend = systemd-libs\ndepend = glibc\ndepend = gcc-libs\n",
+             license = GPL-3.0-only\ndepend = systemd-libs\ndepend = glibc\ndepend = gcc-libs\n\
+             optdepend = polkit: allow CPU power readings from the app\n",
             self.version, self.machine
         );
         for name in ARCH_RUNTIME {

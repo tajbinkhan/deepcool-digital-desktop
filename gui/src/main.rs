@@ -6,6 +6,8 @@
 //! that way (used at sign-in).
 
 mod core;
+#[allow(dead_code)] // `enable` and `disable` are used by the helper binary.
+mod cpu_power;
 mod instance;
 mod panel;
 mod png;
@@ -113,6 +115,59 @@ impl App<'_> {
             // The smoke test exits fully; a screenshot only closes the window.
             *self.quit |= self.automation.smoke_test;
             ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    fn cpu_power_section(&mut self, ui: &mut egui::Ui) {
+        let panel = &mut *self.panel;
+        ui.label(RichText::new("CPU power").strong());
+        match panel.cpu_power {
+            cpu_power::Access::Readable => {
+                ui.horizontal(|ui| {
+                    ui.label("✔ CPU power readings are available, so the display can show CPU power.");
+                    if panel.cpu_power_rule {
+                        let button = egui::Button::new(if panel.cpu_power_busy { "Waiting…" } else { "Turn off" });
+                        if ui
+                            .add_enabled(!panel.cpu_power_busy, button)
+                            .on_hover_text("Make the CPU energy counter readable only by administrators again")
+                            .clicked()
+                        {
+                            panel.set_cpu_power(false);
+                        }
+                    }
+                });
+            }
+            cpu_power::Access::Restricted => {
+                ui.label(
+                    "Your system lets only administrators read the CPU energy counter, \
+                     so the display shows 0 W for CPU power.",
+                );
+                let label = if panel.cpu_power_busy {
+                    "Waiting for permission…"
+                } else {
+                    "Allow CPU power readings…"
+                };
+                if ui
+                    .add_enabled(!panel.cpu_power_busy, egui::Button::new(label))
+                    .clicked()
+                {
+                    panel.set_cpu_power(true);
+                }
+                hint(
+                    ui,
+                    "You'll be asked for an administrator password. This makes the CPU energy counter readable by \
+                     every user on this computer, now and after restarts. Linux restricts it by default because \
+                     precise energy readings have been used in side-channel attacks; on a personal computer the risk \
+                     is low. Running displays restart to pick up the change, and you can turn it off again here.",
+                );
+            }
+            cpu_power::Access::NoSensor => {
+                hint(
+                    ui,
+                    "No supported CPU energy sensor was found, so CPU power can't be shown. Supported kernel \
+                     modules are intel_rapl, amd_energy and zenergy.",
+                );
+            }
         }
     }
 
@@ -268,119 +323,131 @@ impl eframe::App for App<'_> {
         // Controller state can change without output (for example when it is killed).
         ctx.request_repaint_after(Duration::from_millis(500));
 
-        egui::Frame::central_panel(ui.style())
-            .inner_margin(24.0)
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 8.0;
-                ui.label(RichText::new("DeepCool Digital").size(28.0).strong());
-                ui.label("Your hardware. Your display.");
-                ui.add_space(SPACING / 2.0);
-                ui.add(egui::Label::new(RichText::new(&self.panel.status).strong()).wrap());
-                ui.add_space(SPACING / 2.0);
+        // The whole window scrolls when it is shorter than its contents.
+        egui::Frame::central_panel(ui.style()).inner_margin(0.0).show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("window")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    egui::Frame::new().inner_margin(24.0).show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 8.0;
+                        ui.label(RichText::new("DeepCool Digital").size(28.0).strong());
+                        ui.label("Your hardware. Your display.");
+                        ui.add_space(SPACING / 2.0);
+                        ui.add(egui::Label::new(RichText::new(&self.panel.status).strong()).wrap());
+                        ui.add_space(SPACING / 2.0);
 
-                ui.horizontal(|ui| {
-                    let names: Vec<String> = self
-                        .panel
-                        .devices
-                        .iter()
-                        .map(|(pid, name)| format!("{name} · {pid}"))
-                        .collect();
-                    let current = names.get(self.panel.selected).cloned().unwrap_or_else(|| {
-                        if self.panel.scanning {
-                            "Scanning…".into()
-                        } else {
-                            "No device detected".into()
-                        }
-                    });
-                    let mut selected = self.panel.selected;
-                    ui.add_enabled_ui(!names.is_empty(), |ui| {
-                        egui::ComboBox::from_id_salt("device")
-                            .width((ui.available_width() - 150.0).max(200.0))
-                            .selected_text(current)
-                            .show_ui(ui, |ui| {
-                                for (index, name) in names.iter().enumerate() {
-                                    ui.selectable_value(&mut selected, index, name);
+                        ui.horizontal(|ui| {
+                            let names: Vec<String> = self
+                                .panel
+                                .devices
+                                .iter()
+                                .map(|(pid, name)| format!("{name} · {pid}"))
+                                .collect();
+                            let current = names.get(self.panel.selected).cloned().unwrap_or_else(|| {
+                                if self.panel.scanning {
+                                    "Scanning…".into()
+                                } else {
+                                    "No device detected".into()
                                 }
                             });
-                    });
-                    if selected != self.panel.selected {
-                        self.panel.selected = selected;
-                        self.panel.device_changed();
-                    }
-                    if ui
-                        .add_enabled(!self.panel.scanning, egui::Button::new("Refresh devices"))
-                        .clicked()
-                    {
-                        self.panel.scan();
-                    }
-                });
-                ui.add_space(SPACING / 2.0);
-
-                self.settings_grid(ui);
-                ui.add_space(SPACING / 2.0);
-
-                ui.horizontal(|ui| {
-                    let accent = ui.visuals().selection.bg_fill;
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let quit = ui
-                            .button("Stop all and quit")
-                            .on_hover_text("Stops every display and exits the app");
-                        if quit.clicked() {
-                            *self.quit = true;
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                            let can_start = self.panel.can_start();
-                            // Highlight Start only while it can be pressed.
-                            let start = if can_start {
-                                egui::Button::new(RichText::new("Start display").color(Color32::WHITE)).fill(accent)
-                            } else {
-                                egui::Button::new("Start display")
-                            };
-                            if ui.add_enabled(can_start, start).clicked() {
-                                self.panel.start();
+                            let mut selected = self.panel.selected;
+                            ui.add_enabled_ui(!names.is_empty(), |ui| {
+                                egui::ComboBox::from_id_salt("device")
+                                    .width((ui.available_width() - 150.0).max(200.0))
+                                    .selected_text(current)
+                                    .show_ui(ui, |ui| {
+                                        for (index, name) in names.iter().enumerate() {
+                                            ui.selectable_value(&mut selected, index, name);
+                                        }
+                                    });
+                            });
+                            if selected != self.panel.selected {
+                                self.panel.selected = selected;
+                                self.panel.device_changed();
                             }
                             if ui
-                                .add_enabled(self.panel.is_running(), egui::Button::new("Stop display"))
+                                .add_enabled(!self.panel.scanning, egui::Button::new("Refresh devices"))
                                 .clicked()
                             {
-                                self.panel.stop();
-                            }
-                            if ui
-                                .add_enabled(self.panel.pid().is_some(), egui::Button::new("Save settings"))
-                                .clicked()
-                            {
-                                self.panel.save();
+                                self.panel.scan();
                             }
                         });
-                    });
-                });
-                hint(
-                    ui,
-                    "Start applies the selected settings. Stop before changing a running display. \
+                        ui.add_space(SPACING / 2.0);
+
+                        self.settings_grid(ui);
+                        ui.add_space(SPACING / 2.0);
+
+                        ui.horizontal(|ui| {
+                            let accent = ui.visuals().selection.bg_fill;
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let quit = ui
+                                    .button("Stop all and quit")
+                                    .on_hover_text("Stops every display and exits the app");
+                                if quit.clicked() {
+                                    *self.quit = true;
+                                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                                }
+                                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                                    let can_start = self.panel.can_start();
+                                    // Highlight Start only while it can be pressed.
+                                    let start = if can_start {
+                                        egui::Button::new(RichText::new("Start display").color(Color32::WHITE))
+                                            .fill(accent)
+                                    } else {
+                                        egui::Button::new("Start display")
+                                    };
+                                    if ui.add_enabled(can_start, start).clicked() {
+                                        self.panel.start();
+                                    }
+                                    if ui
+                                        .add_enabled(self.panel.is_running(), egui::Button::new("Stop display"))
+                                        .clicked()
+                                    {
+                                        self.panel.stop();
+                                    }
+                                    if ui
+                                        .add_enabled(self.panel.pid().is_some(), egui::Button::new("Save settings"))
+                                        .clicked()
+                                    {
+                                        self.panel.save();
+                                    }
+                                });
+                            });
+                        });
+                        hint(
+                            ui,
+                            "Start applies the selected settings. Stop before changing a running display. \
                  An existing system service must be stopped separately.",
-                );
-                ui.add_space(SPACING / 2.0);
+                        );
+                        ui.add_space(SPACING / 2.0);
 
-                self.background_section(ui);
-                ui.add_space(SPACING / 2.0);
+                        self.cpu_power_section(ui);
+                        ui.add_space(SPACING / 2.0);
 
-                ui.label(RichText::new("Activity").strong());
-                egui::Frame::group(ui.style()).show(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .min_scrolled_height(110.0)
-                        .stick_to_bottom(true)
-                        .show(ui, |ui| {
-                            let text: String = self.panel.activity.iter().map(|line| format!("{line}\n")).collect();
-                            ui.add(
-                                egui::Label::new(RichText::new(text).monospace())
-                                    .wrap()
-                                    .selectable(true),
-                            );
+                        self.background_section(ui);
+                        ui.add_space(SPACING / 2.0);
+
+                        ui.label(RichText::new("Activity").strong());
+                        egui::Frame::group(ui.style()).show(ui, |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_salt("activity")
+                                .auto_shrink([false, false])
+                                .max_height(180.0)
+                                .stick_to_bottom(true)
+                                .show(ui, |ui| {
+                                    let text: String =
+                                        self.panel.activity.iter().map(|line| format!("{line}\n")).collect();
+                                    ui.add(
+                                        egui::Label::new(RichText::new(text).monospace())
+                                            .wrap()
+                                            .selectable(true),
+                                    );
+                                });
                         });
+                    });
                 });
-            });
+        });
     }
 }
 
