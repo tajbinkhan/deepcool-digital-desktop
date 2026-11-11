@@ -1,6 +1,6 @@
 [workspace]
-members = [".", "gui", "xtask"]
-default-members = [".", "gui"]
+members = [".", "crates/core", "gui", "app/src-tauri", "xtask"]
+default-members = [".", "crates/core", "gui"]
 resolver = "2"
 
 [package]
@@ -12,9 +12,8 @@ license = "GPL-3.0-only"
 repository = "https://github.com/tajbinkhan/deepcool-digital-desktop"
 
 [dependencies]
-libloading = "0.9.0"
+deepcool-core = { path = "crates/core" }
 hidapi = "2.6.7"
-cpu-monitor = "0.1.1"
 colored = "3.1.1"
 
 [profile.release]

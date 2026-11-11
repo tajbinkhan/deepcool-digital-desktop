@@ -1,0 +1,13 @@
+[package]
+name = "deepcool-core"
+version = "0.15.1"
+edition = "2021"
+description = "Device drivers and sensor readers for DeepCool digital displays"
+license = "GPL-3.0-only"
+repository = "https://github.com/tajbinkhan/deepcool-digital-desktop"
+
+[dependencies]
+libloading = "0.9.0"
+hidapi = "2.6.7"
+cpu-monitor = "0.1.1"
+libc = "0.2"

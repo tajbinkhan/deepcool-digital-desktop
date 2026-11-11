@@ -1,4 +1,8 @@
-use crate::{devices::Mode, error, monitor::gpu::pci::{get_gpu_list, Vendor}, CH510_PRODUCT_ID, CH510_VENDOR_ID, DEFAULT_VENDOR_ID};
+use crate::error;
+use deepcool_core::{
+    devices::{Mode, CH510_PRODUCT_ID, CH510_VENDOR_ID, DEFAULT_VENDOR_ID},
+    monitor::gpu::pci::{get_gpu_list, Vendor},
+};
 use colored::*;
 use hidapi::HidApi;
 use std::{collections::HashMap, env::args, process::exit, time::Duration};

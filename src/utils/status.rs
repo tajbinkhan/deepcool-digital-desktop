@@ -1,47 +1,19 @@
-use crate::Mode;
 use colored::*;
+use deepcool_core::{Alarm, Status};
 use std::time::Duration;
 
-pub enum TemperatureUnit {
-    Celsius,
-    Fahrenheit,
-}
-
-impl TemperatureUnit {
-    const fn symbol(&self) -> &'static str {
-        match self {
-            TemperatureUnit::Celsius => "°C",
-            TemperatureUnit::Fahrenheit => "°F",
-        }
-    }
-}
-
-pub enum AlarmState {
-    Auto,
-    On,
-    Off,
-    NotSupported,
-}
-
-pub struct Alarm {
-    pub state: AlarmState,
-    pub temp_limit: u8,
-    pub temp_warning: u8,
-}
-
 pub fn print_device_status(
-    mode: &Mode,
-    secondary: Option<&Mode>,
+    status: &Status,
     rotation: Option<u16>,
     lead_zeros: Option<bool>,
-    temp_unit: TemperatureUnit,
-    alarm: Alarm,
+    fahrenheit: bool,
     update: Duration,
 ) {
+    let unit = if fahrenheit { "°F" } else { "°C" };
     println!("-----");
-    match secondary {
-        Some(s) => println!("DISP. MODE: {} | {}", mode.symbol().bright_cyan(), s.symbol().bright_cyan()),
-        None => println!("DISP. MODE: {}", mode.symbol().bright_cyan()),
+    match status.secondary {
+        Some(s) => println!("DISP. MODE: {} | {}", status.mode.symbol().bright_cyan(), s.symbol().bright_cyan()),
+        None => println!("DISP. MODE: {}", status.mode.symbol().bright_cyan()),
     }
     if let Some(r) = rotation {
         if r > 0 {
@@ -56,31 +28,22 @@ pub fn print_device_status(
             false => println!("LEAD. ZERO: {}", "off".bright_red()),
         }
     }
-    println!("TEMP. UNIT: {}", temp_unit.symbol().bright_cyan());
-    match alarm.state {
-        AlarmState::Auto => {
-            if alarm.temp_warning > 0 {
-                println!(
-                    "ALARM:      {} | {} [warning: {}]",
-                    "auto".bright_green(),
-                    (alarm.temp_limit.to_string() + temp_unit.symbol()).bright_cyan(),
-                    (alarm.temp_warning.to_string() + temp_unit.symbol()).bright_cyan()
-                );
-            } else {
-                println!(
-                    "ALARM:      {} | {}",
-                    "auto".bright_green(),
-                    (alarm.temp_limit.to_string() + temp_unit.symbol()).bright_cyan()
-                );
-            }
-        }
-        AlarmState::On => println!(
-            "ALARM:      {} | {}",
-            "on".bright_green(),
-            (alarm.temp_limit.to_string() + temp_unit.symbol()).bright_cyan()
+    println!("TEMP. UNIT: {}", unit.bright_cyan());
+    match status.alarm {
+        Alarm::Auto { limit, warning } if warning > 0 => println!(
+            "ALARM:      {} | {} [warning: {}]",
+            "auto".bright_green(),
+            format!("{limit}{unit}").bright_cyan(),
+            format!("{warning}{unit}").bright_cyan()
         ),
-        AlarmState::Off => println!("ALARM:      {}", "off".bright_red()),
-        AlarmState::NotSupported => println!("ALARM:      {}", "not supported".bright_black().italic()),
+        Alarm::Auto { limit, .. } => {
+            println!("ALARM:      {} | {}", "auto".bright_green(), format!("{limit}{unit}").bright_cyan())
+        }
+        Alarm::On { limit } => {
+            println!("ALARM:      {} | {}", "on".bright_green(), format!("{limit}{unit}").bright_cyan())
+        }
+        Alarm::Off => println!("ALARM:      {}", "off".bright_red()),
+        Alarm::NotSupported => println!("ALARM:      {}", "not supported".bright_black().italic()),
     }
     println!("-----");
     println!("Update interval: {}", format!("{:?}", update).bright_cyan());

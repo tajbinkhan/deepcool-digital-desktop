@@ -1,0 +1,88 @@
+/* Colours and sizes measured from the reference screenshots (960×640 window). */
+:root {
+  --teal: #008c8c;          /* brand, active icons, borders, toggles */
+  --teal-value: #069590;    /* numeric readings */
+  --teal-arc: #2f9f9f;      /* gauge arcs */
+  --teal-fill: #73c0c0;     /* hatched bars */
+  --teal-hatch: #4aadad;    /* hatch lines */
+  --teal-soft: #e5f3f3;     /* selected menu item */
+  --text: #333333;
+  --text-muted: #999999;
+  --text-secondary: #666666;
+  --icon: #a6a6a6;
+  --page: #fafafa;
+  --surface: #ffffff;
+  --card-border: #f2f2f2;
+  --tile: #f9f9f9;
+  --track: #f0f0f0;
+  --line: #ebebeb;
+  --divider: #e2e2e2;
+  --control-border: #dcdfe6;
+  --danger: #e06666;
+
+  --titlebar-h: 53px;
+  --rail-w: 56px;
+  --gap: 12px;
+  --pad: 18px;
+
+  font-family: "Roboto", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+#app {
+  height: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.value {
+  color: var(--teal-value);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.label {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 16px;
+}

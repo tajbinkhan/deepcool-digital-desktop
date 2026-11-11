@@ -79,8 +79,9 @@ Unplugged devices require stopping, reconnecting and refreshing.
 
 ## Building
 
-The repository is a Cargo workspace: the controller is the root crate, the desktop app is `gui/`, and
-`xtask/` holds the packaging tool. Everything is Rust.
+The repository is a Cargo workspace: device drivers and sensor readers are the `crates/core` library, the
+command-line controller is the root crate, the desktop app is `gui/`, and `xtask/` holds the packaging tool.
+Everything is Rust. `cargo run -p deepcool-core --example readings` prints live sensor readings.
 
 Build dependencies: Rust toolchain, pkg-config and libudev development headers (for the controller).
 The desktop app needs no system development packages.
