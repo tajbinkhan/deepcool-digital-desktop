@@ -1,6 +1,6 @@
 // App-wide state shared by all pages.
 
-import { call, listen, type Device, type PowerStatus, type Preferences, type Snapshot, type UpdateView } from "./api";
+import { call, inTauri, listen, type Device, type PowerStatus, type Preferences, type Snapshot, type UpdateView } from "./api";
 import { resolveLang, translate, type Key, type Lang } from "./i18n";
 
 export type Page = "dashboard" | "computer" | "device" | "settings";
@@ -80,6 +80,14 @@ export async function init() {
   await listen("devices-changed", () => refreshDevices());
   await listen("update-changed", () => refreshUpdate());
   await Promise.all([refreshDevices(), refreshPower(), refreshUpdate()]);
+  // Browser preview only: open a page from the URL, e.g. `?page=device&detail=10` (for screenshots).
+  if (!inTauri) {
+    const params = new URLSearchParams(location.search);
+    const page = params.get("page");
+    if (page === "dashboard" || page === "computer" || page === "device" || page === "settings") app.page = page;
+    const detail = Number(params.get("detail"));
+    if (detail) app.detail = detail;
+  }
   // Devices can be plugged in at any time; check now and then while the window is open.
   setInterval(refreshDevices, 5000);
 }

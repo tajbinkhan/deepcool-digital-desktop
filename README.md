@@ -2,13 +2,19 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational)
-![Written in Rust](https://img.shields.io/badge/written%20in-Rust-orange)
+![Built with Rust and Tauri](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri-orange)
+[![Latest release](https://img.shields.io/github/v/release/tajbinkhan/deepcool-digital-desktop)](https://github.com/tajbinkhan/deepcool-digital-desktop/releases/latest)
 
 Control the digital displays of DeepCool CPU coolers and cases on Linux, from a desktop app.
-Pick your device, choose what it shows, and let it run in the background — including automatically
-when you sign in. Everything is written in Rust.
+See live system readings, pick what your device shows, and let it run in the background — including
+automatically when you sign in. The device code is pure Rust; the window is a [Tauri](https://tauri.app)
+app with a Svelte interface.
 
-![DeepCool Digital desktop app](docs/screenshot.png)
+![DeepCool Digital dashboard](docs/screenshot.png)
+
+| Device settings with live preview | Computer details | Settings |
+|---|---|---|
+| ![Device settings](docs/screenshot-device.png) | ![Computer details](docs/screenshot-computer.png) | ![Settings](docs/screenshot-settings.png) |
 
 > This project is a fork of [**deepcool-digital-linux**](https://github.com/Nortank12/deepcool-digital-linux)
 > by **Nortank12** and its contributors, who wrote the device controller that talks to the hardware.
@@ -34,13 +40,19 @@ when you sign in. Everything is written in Rust.
 
 ## Features
 
-- **Desktop app** with a live dashboard (CPU and GPU load, temperature, clock and power; memory, storage
-  and network), your computer's hardware details, and per-device settings with a live preview of the
-  display. Seven languages. No terminal needed.
+- **Desktop app** with a live dashboard (CPU and GPU load, temperature, clock and power, GPU memory;
+  memory use, disk speed and space, network speed), your computer's hardware details, and per-device
+  settings with a live preview of the display. Choose which GPU to show when you have several.
+- **Seven languages**: English, Deutsch, Español, Français, Italiano, Português and Русский; °C or °F.
+- **A native Linux window**: your desktop draws the title bar, so buttons, shadow, resizing and snapping
+  match the rest of your system on GNOME, KDE and others.
 - **Only valid choices**: display modes, rotation, alarm and leading zeros are shown only where the
   selected device supports them.
 - **Runs in the background**: closing the window keeps your displays running. A tray icon brings the window
   back or quits the app; only one copy ever runs.
+- **Light on resources**: displays run inside the app instead of as separate programs, and sensors are read
+  only while needed. In the background (window closed) it uses about 45 MB of memory and 0.1% CPU; with the
+  window open, about 190 MB and 1% CPU.
 - **Starts automatically**: connected devices show readings as soon as the app runs, and the app can start
   without a window when you sign in. Displays that stop unexpectedly (for example after being unplugged)
   are retried.
@@ -51,7 +63,7 @@ when you sign in. Everything is written in Rust.
 - **Several devices at once**, each with its own settings.
 - **No root needed**: packages install udev rules that give your desktop session access to the device.
 - **Packages** for Debian/Ubuntu (`.deb`), Fedora/openSUSE (`.rpm`), Arch (`.pkg.tar.zst`), plus a portable
-  `.tar.gz` and AppImage.
+  `.tar.gz`.
 - **The original command-line controller** is included for scripts and services, with a fix so it keeps
   running when the CPU power sensor can't be read.
 
@@ -108,9 +120,10 @@ sudo dnf install ./deepcool-digital-gui-*.x86_64.rpm
 sudo pacman -U deepcool-digital-gui-*-x86_64.pkg.tar.zst
 ```
 
-**Any distribution (portable)**: extract the `.tar.gz` and run `AppRun`, or, where a release includes one,
-make the AppImage executable and run it. Portable builds cannot install the USB access rules for you; install them once
-as described in [Troubleshooting](#the-app-says-usb-access-is-denied-or-no-device-is-found).
+**Any distribution (portable)**: extract the `.tar.gz` and run `DeepCoolDigital/AppRun`. Portable builds
+cannot install the USB access rules for you; install them once as described in
+[Troubleshooting](#the-app-says-usb-access-is-denied-or-no-device-is-found). They also can't update
+themselves, and they don't add the app to your app menu.
 
 The packages install:
 
@@ -122,9 +135,18 @@ The packages install:
 | `/usr/lib/deepcool-digital/deepcool-digital-update` | Helper the app uses to [install updates](#updates) |
 | `/usr/lib/udev/rules.d/70-deepcool-digital.rules` | Gives your desktop session access to DeepCool USB devices |
 
-Requirements: a graphical Linux desktop (Wayland or X11). The `.deb`, `.rpm` and Arch packages install the
-WebKitGTK and tray icon libraries the window needs; the portable `.tar.gz` expects them to be installed
-already (`libwebkit2gtk-4.1` and `libayatana-appindicator3`).
+Requirements: x86_64, glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+, Arch), and a graphical
+desktop (Wayland or X11). The `.deb`, `.rpm` and Arch packages install the WebKitGTK and tray icon libraries
+the window needs; the portable `.tar.gz` expects them to be installed already (`libwebkit2gtk-4.1` and
+`libayatana-appindicator3`).
+
+### Upgrading from 0.15 or earlier
+
+Version 0.16 replaces the earlier egui window with a new app, installed under the same name. Install it over
+the old version (or accept the update offered inside the app): saved device settings, the sign-in entry and
+the CPU power permission carry over. Displays now start on their own when the app runs; there are no
+**Start display** / **Stop display** buttons any more (use **Show readings on this device** instead). The
+activity log was removed; errors are shown in the app.
 
 ## Set up the app
 
@@ -481,6 +503,12 @@ password prompt doesn't appear, check that polkit is installed (`pkexec` on Debi
 On GNOME, make sure only one AppIndicator extension is enabled: Ubuntu ships **Ubuntu AppIndicators**, and
 installing **AppIndicator and KStatusNotifierItem Support** as well runs the same code twice.
 
+#### The dock or taskbar shows a generic icon
+
+The icon comes from the app's desktop entry, `/usr/share/applications/deepcool-digital.desktop`, which the
+packages install. Copies run from a source build or the portable `.tar.gz` don't have one, so the desktop
+shows a generic icon.
+
 #### Where are the logs?
 
 Problems with a device are shown on its page in the app. For more detail, start the app from a terminal
@@ -496,7 +524,11 @@ belongs in the controller (`src/`); consider sending it to the
 Before opening a pull request:
 
 ```bash
-cargo fmt -p deepcool-digital-gui -p xtask && cargo clippy --workspace --all-targets && cargo test --workspace
+cargo fmt -p deepcool-digital-app -p deepcool-core -p xtask && cargo clippy --workspace --all-targets && cargo test --workspace
+```
+
+```bash
+pnpm --dir app check
 ```
 
 The controller in `src/` keeps the original project's formatting so upstream changes stay easy to merge.
@@ -508,10 +540,12 @@ Maintainers: see [RELEASING.md](RELEASING.md) for how to publish a new version.
 - **[Nortank12](https://github.com/Nortank12)** and the contributors of
   [deepcool-digital-linux](https://github.com/Nortank12/deepcool-digital-linux): the device controller,
   device support, protocol research and device documentation this project is built on.
-- **[Tajbin Khan](https://github.com/tajbinkhan)**: the desktop app, background and sign-in support,
-  single-instance handling, CPU power access, in-app updates, packaging tool and CPU energy sensor fix.
+- **[Tajbin Khan](https://github.com/tajbinkhan)**: the desktop app (rebuilt with Tauri in 0.16), the shared
+  device library, background and sign-in support, single-instance handling, CPU power access, in-app
+  updates, packaging tool and CPU energy sensor fix.
 
-This project is not affiliated with or endorsed by DeepCool.
+This project is not affiliated with or endorsed by DeepCool. DeepCool and the DeepCool logo are trademarks
+of their owner and are used here only to identify the hardware this software works with.
 
 ## License
 

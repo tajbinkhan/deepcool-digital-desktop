@@ -46,7 +46,11 @@ export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in
 const GB = 1024 ** 3;
 const mock = {
   gpu: 1,
-  power: { access: "restricted", ruleInstalled: false } as PowerStatus,
+  // `?power=restricted` in the browser preview shows the "Allow" state.
+  power: {
+    access: typeof location !== "undefined" && location.search.includes("power=restricted") ? "restricted" : "readable",
+    ruleInstalled: true,
+  } as PowerStatus,
   update: { state: "idle", version: null, progress: null, message: null, canInstall: true } as UpdateView,
   prefs: { run_in_background: true, check_for_updates: true, fahrenheit: false, language: "", start_at_login: true } as Preferences,
   profile: { mode: "Device default", secondary: "Device default", rotate: 0, fahrenheit: false, alarm: false, zeros: true, update: 1000, gpuid: "", autostart: true } as Profile,
@@ -84,7 +88,7 @@ async function mockInvoke<T>(cmd: string, args: Record<string, unknown> = {}): P
     stop_display: () => null,
     get_preferences: () => mock.prefs,
     set_preferences: () => { mock.prefs = args.preferences as Preferences; return null; },
-    app_version: () => "0.16.0",
+    app_version: () => __APP_VERSION__,
     open_website: () => null,
     cpu_power_status: () => mock.power,
     update_state: () => mock.update,
