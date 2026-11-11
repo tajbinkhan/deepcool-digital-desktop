@@ -38,8 +38,11 @@ jobs:
       - name: Install Node.js and pnpm
         run: |
           curl -fsSL https://nodejs.org/dist/v22.20.0/node-v22.20.0-linux-x64.tar.xz | tar -xJ -C /opt
+          # npm runs through "#!/usr/bin/env node", so node must be on PATH in this step too.
+          export PATH="/opt/node-v22.20.0-linux-x64/bin:$PATH"
           echo "/opt/node-v22.20.0-linux-x64/bin" >> "$GITHUB_PATH"
-          /opt/node-v22.20.0-linux-x64/bin/npm install -g pnpm@10
+          npm install -g pnpm@10
+          node --version && pnpm --version
 
       - name: Check the tag matches the app version
         if: startsWith(github.ref, 'refs/tags/')

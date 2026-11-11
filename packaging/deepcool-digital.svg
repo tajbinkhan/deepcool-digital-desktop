@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect x="4" y="4" width="120" height="120" rx="28" fill="#102827"/><rect x="26" y="28" width="76" height="64" rx="10" fill="none" stroke="#34dfc2" stroke-width="7"/><path d="M38 62h13l8-19 13 36 8-17h11M49 105h30" fill="none" stroke="#34dfc2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The DeepCool mark (from the official logo) on a white rounded tile. -->
+  <rect x="16" y="16" width="480" height="480" rx="104" fill="#ffffff"/>
+  <g transform="translate(256 256) scale(0.95) translate(-1771.5 -275.5)" fill="#198686">
+    <path d="M1725 92H1771V229H1680V275H1771V321H1634V183H1725Z"/>
+    <path d="M1771 321H1909V367H1817V459H1771Z"/>
+  </g>
+</svg>
