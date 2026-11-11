@@ -1,6 +1,6 @@
 [package]
 name = "deepcool-core"
-version = "0.16.1"
+version = "0.16.2"
 edition = "2021"
 description = "Device drivers and sensor readers for DeepCool digital displays"
 license = "GPL-3.0-only"

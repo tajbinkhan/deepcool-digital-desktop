@@ -5,7 +5,7 @@ resolver = "2"
 
 [package]
 name = "deepcool-digital-linux"
-version = "0.16.1"
+version = "0.16.2"
 edition = "2021"
 description = "Controller for the digital displays of DeepCool CPU coolers and cases"
 license = "GPL-3.0-only"

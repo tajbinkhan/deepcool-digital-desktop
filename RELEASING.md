@@ -9,9 +9,12 @@ the [release workflow](.github/workflows/release.yml):
 1. checks that the tag matches the version in `app/src-tauri/Cargo.toml`,
 2. runs all tests,
 3. builds the `.deb`, `.rpm`, Arch `.pkg.tar.zst` and portable `.tar.gz` packages plus `SHA256SUMS`, and
-4. attaches them to a **draft** release.
+4. publishes them as a release, titled `DeepCool Digital Desktop X.Y.Z`, with install instructions and an
+   automatic list of changes.
 
-Nothing becomes public until you review the draft and publish it.
+The release is **public as soon as the build passes**, and installed copies start offering it as an update.
+So try a build before you tag: run the workflow by hand on `main` and install its packages (see
+[Test builds without releasing](#test-builds-without-releasing)). If the build fails, nothing is published.
 
 Once a release is published, installed copies of the app (version 0.14.0 and later) offer it as an update.
 The in-app updater depends on how releases look, so keep these the same:
@@ -19,7 +22,7 @@ The in-app updater depends on how releases look, so keep these the same:
 - tags are `vMAJOR.MINOR.PATCH`,
 - package files are named as the workflow names them (for example `deepcool-digital-gui_0.15.0_amd64.deb`),
 - every release includes `SHA256SUMS`; without it the app refuses to install the update,
-- the release is **published** (not a draft) and **not** marked as a pre-release. GitHub's "latest release",
+- the release is **published** (not a draft; the workflow does this) and **not** marked as a pre-release. GitHub's "latest release",
   which the app asks for, ignores drafts and pre-releases. Use a pre-release to share a test build without
   offering it to everyone.
 
@@ -36,8 +39,8 @@ need that machine's glibc version, so don't upload local builds to a release.
 - [4. Commit and push](#4-commit-and-push)
 - [5. Tag the release](#5-tag-the-release)
 - [6. Wait for the build](#6-wait-for-the-build)
-- [7. Review the draft](#7-review-the-draft)
-- [8. Write the release notes and publish](#8-write-the-release-notes-and-publish)
+- [7. Check the published release](#7-check-the-published-release)
+- [8. Add highlights to the notes](#8-add-highlights-to-the-notes)
 - [9. After publishing](#9-after-publishing)
 - [If something goes wrong](#if-something-goes-wrong)
 - [Test builds without releasing](#test-builds-without-releasing)
@@ -191,10 +194,10 @@ gh run watch --repo tajbinkhan/deepcool-digital-desktop
 
 If it fails, see [If something goes wrong](#if-something-goes-wrong).
 
-## 7. Review the draft
+## 7. Check the published release
 
 Open the [Releases page](https://github.com/tajbinkhan/deepcool-digital-desktop/releases). The new release is
-marked **Draft** and only people with write access can see it. It should have five files:
+public and marked **Latest**. It should have five files:
 
 | File | For |
 |---|---|
@@ -204,7 +207,7 @@ marked **Draft** and only people with write access can see it. It should have fi
 | `deepcool-digital-gui-0.13.0-x86_64.tar.gz` | Any distribution (portable) |
 | `SHA256SUMS` | Checksums of the files above |
 
-It's worth downloading and checking them before publishing:
+Check the downloads:
 
 ```bash
 mkdir -p /tmp/release-check && cd /tmp/release-check
@@ -222,61 +225,24 @@ sha256sum -c SHA256SUMS
 dpkg-deb -I deepcool-digital-gui_0.13.0_amd64.deb | grep -E "Version|Depends"
 ```
 
-The `Depends` line should start with `libc6 (>= 2.35)`. A higher number means the build picked up a newer
-glibc; don't publish it.
+The `Depends` line should start with `libc6 (>= 2.35)`. The build log's **Show glibc requirement** step also
+prints the newest glibc version each binary needs. If something is wrong, see
+[A published release has a serious bug](#a-published-release-has-a-serious-bug).
 
-The build log's **Show glibc requirement** step also prints the newest glibc version each binary needs.
+## 8. Add highlights to the notes
 
-## 8. Write the release notes and publish
+The workflow writes install instructions and lists the commits since the previous release. Optionally add a
+short summary at the top: select **Edit** on the release, or save it as `notes.md` and run
 
-On the draft, select **Edit**, set the title to `DeepCool Digital Desktop 0.13.0`, and write the notes. Use
-this template:
-
-```markdown
-One-sentence summary of this release.
-
-## What's new
-
-- New: …
-- Improved: …
-- Fixed: …
-
-## Install
-
-Download the file for your distribution below, then:
-
-| Distribution | Command |
-|---|---|
-| Debian, Ubuntu, Linux Mint, Pop!_OS | `sudo apt install ./deepcool-digital-gui_0.13.0_amd64.deb` |
-| Fedora, openSUSE | `sudo dnf install ./deepcool-digital-gui-0.13.0-1.x86_64.rpm` |
-| Arch Linux, Manjaro, EndeavourOS | `sudo pacman -U deepcool-digital-gui-0.13.0-1-x86_64.pkg.tar.zst` |
-| Other (portable) | Extract `deepcool-digital-gui-0.13.0-x86_64.tar.gz` and run `DeepCoolDigital/AppRun` |
-
-Installing over an older version keeps your saved settings. If the app is running in the background,
-select **Stop all and quit** first, or sign out and in after installing.
-
-**Requirements:** x86_64, a graphical desktop (Wayland or X11) with OpenGL, and glibc 2.35 or newer.
-
-Verify downloads with `sha256sum -c SHA256SUMS`.
-
-## Credits
-
-Built on [deepcool-digital-linux](https://github.com/Nortank12/deepcool-digital-linux) by Nortank12 and
-contributors. Licensed under the GNU GPL v3.0.
+```bash
+gh release edit v0.13.0 --repo tajbinkhan/deepcool-digital-desktop --notes-file notes.md
 ```
 
-To list what changed since the last release:
+Mention anything users must do themselves, such as reconnecting the device after a udev rule change. To see
+what changed:
 
 ```bash
 git log --oneline v0.12.0..v0.13.0
-```
-
-Mention anything users must do themselves, such as reconnecting the device after a udev rule change.
-
-Then select **Publish release**. With the GitHub CLI, save the notes as `notes.md` and run:
-
-```bash
-gh release edit v0.13.0 --repo tajbinkhan/deepcool-digital-desktop --title "DeepCool Digital Desktop 0.13.0" --notes-file notes.md --draft=false --latest
 ```
 
 ## 9. After publishing
@@ -296,14 +262,15 @@ and tag again.
 
 #### Tests or packaging fail
 
-Open the failed run on the Actions page and read the failing step's log. Fix the problem on `main`, then move
-the tag to the fixed commit:
+Open the failed run on the Actions page and read the failing step's log. Nothing was published, because the
+release is only created after every step passes. Fix the problem on `main`, then move the tag to the fixed
+commit:
 
 ```bash
 git push --delete origin v0.13.0 && git tag -d v0.13.0
 ```
 
-If a draft release was already created, delete it too:
+If a release was created anyway (for example the publish step itself failed halfway), delete it too:
 
 ```bash
 gh release delete v0.13.0 --repo tajbinkhan/deepcool-digital-desktop --yes
@@ -348,11 +315,12 @@ gh workflow run release.yml --repo tajbinkhan/deepcool-digital-desktop --ref mai
 - [ ] Version updated in the four manifests above, and `cargo update --workspace` run
 - [ ] `cargo fmt -p deepcool-digital-app -p xtask --check`, `cargo clippy --workspace --all-targets` (no errors) and
       `cargo test --workspace` pass
-- [ ] App tried by hand (device, start/stop, settings, background, automatic start)
+- [ ] App tried by hand (device, settings, background, automatic start, CPU power)
+- [ ] Test build run by hand on `main`, and its `.deb` installed and tried
 - [ ] Version commit pushed to `main`
 - [ ] Tag `vX.Y.Z` created and pushed
 - [ ] Release workflow succeeded
-- [ ] Draft has the five files, checksums verify, `.deb` needs `libc6 (>= 2.35)`
-- [ ] Release notes written and release published
+- [ ] Release has the five files, checksums verify, `.deb` needs `libc6 (>= 2.35)`
+- [ ] Highlights added to the notes (optional)
 - [ ] Downloads checked from the public release page
-- [ ] An installed older version (0.14.0 or later) shows the update banner and updates with **Update now**
+- [ ] An installed older version (0.14.0 or later) offers the update and installs it with **Update now**

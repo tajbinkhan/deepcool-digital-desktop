@@ -740,7 +740,7 @@ dependencies = [
 
 [[package]]
 name = "deepcool-core"
-version = "0.16.1"
+version = "0.16.2"
 dependencies = [
  "cpu-monitor",
  "hidapi",
@@ -751,7 +751,7 @@ dependencies = [
 
 [[package]]
 name = "deepcool-digital-app"
-version = "0.16.1"
+version = "0.16.2"
 dependencies = [
  "deepcool-core",
  "glib",
@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "deepcool-digital-helpers"
-version = "0.16.1"
+version = "0.16.2"
 dependencies = [
  "deepcool-core",
  "libc",
@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "deepcool-digital-linux"
-version = "0.16.1"
+version = "0.16.2"
 dependencies = [
  "colored",
  "deepcool-core",
