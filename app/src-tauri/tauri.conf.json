@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "DeepCool Digital",
-  "version": "0.16.0",
   "identifier": "io.github.tajbinkhan.deepcool-digital",
   "build": {
     "frontendDist": "../dist",

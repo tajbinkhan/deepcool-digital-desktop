@@ -4,15 +4,11 @@
 //! release and verifying its checksum. It only installs a package named
 //! `deepcool-digital-gui`, in the format this system installed the app with.
 
-#[path = "../update.rs"]
-#[allow(dead_code)]
-mod update;
-
 use std::{
     path::Path,
     process::{exit, Command},
 };
-use update::Installer;
+use deepcool_core::update::{self, Installer};
 
 const USAGE: &str = "Usage: deepcool-digital-update <install|check> <package file>
 

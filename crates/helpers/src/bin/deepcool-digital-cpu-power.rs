@@ -4,11 +4,7 @@
 //! "Allow CPU power readings" or "Turn off". It accepts no paths or other input,
 //! only one of the fixed commands below.
 
-#[path = "../cpu_power.rs"]
-#[allow(dead_code)]
-mod cpu_power;
-
-use cpu_power::Access;
+use deepcool_core::cpu_power::{self, Access};
 use std::{path::Path, process::exit};
 
 const USAGE: &str = "Usage: deepcool-digital-cpu-power <enable|disable|status>

@@ -1,7 +1,7 @@
 //! Checks GitHub for a newer version, downloads and verifies it, and installs it with
 //! the system's package manager through the `deepcool-digital-update` helper.
 
-use crate::update::{self, Asset, Installer, Release};
+use deepcool_core::update::{self, Asset, Installer, Release};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -182,6 +182,11 @@ pub fn download(release: &Release, asset: &Asset, dir: &Path, progress: &dyn Fn(
     Ok(target)
 }
 
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
 fn cache_dir() -> PathBuf {
     match std::env::var_os("XDG_CACHE_HOME") {
         Some(dir) if !dir.is_empty() => PathBuf::from(dir),
@@ -271,7 +276,7 @@ impl Updater {
         let helper = app_path()
             .ok_or("Could not find this program.")?
             .with_file_name(update::HELPER_NAME);
-        if crate::core::is_executable(&helper) {
+        if is_executable(&helper) {
             Ok(helper)
         } else {
             Err(format!(
@@ -402,7 +407,13 @@ impl Updater {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::tests::temp_dir;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("deepcool-app-test-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
     use std::{io::BufRead, net::TcpListener};
 
     fn sha256(data: &[u8]) -> String {

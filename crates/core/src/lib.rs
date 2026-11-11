@@ -10,6 +10,7 @@ pub mod monitor;
 pub mod runner;
 pub mod system;
 pub mod telemetry;
+pub mod update;
 
 pub use devices::{driver_for, find_devices, vendor_for, Alarm, Driver, Found, Mode, Settings, Status};
 pub use runner::{run, spawn, Running};

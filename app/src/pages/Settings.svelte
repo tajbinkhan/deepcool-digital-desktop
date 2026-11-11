@@ -1,12 +1,12 @@
 <script lang="ts">
   import { call } from "../lib/api";
   import { LANGUAGES } from "../lib/i18n";
-  import { app, savePrefs, setCpuPower, t } from "../lib/store.svelte";
+  import { app, refreshUpdate, savePrefs, setCpuPower, t } from "../lib/store.svelte";
+  import type { UpdateView } from "../lib/api";
   import Select from "../components/Select.svelte";
   import Toggle from "../components/Toggle.svelte";
 
   const APP = "DeepCool Digital";
-  let notice = $state<string | null>(null);
   let error = $state<string | null>(null);
 
   /** Splits "Boot {app} Auto-start" so the app name can be bold. */
@@ -22,6 +22,23 @@
     } catch (e) {
       error = String(e);
     }
+  }
+
+  const busy = (u: UpdateView | null) => !!u && ["checking", "downloading", "installing"].includes(u.state);
+
+  async function updateCall(command: string) {
+    error = null;
+    try {
+      app.update = await call<UpdateView>(command);
+    } catch (e) {
+      error = String(e);
+      await refreshUpdate();
+    }
+  }
+
+  async function restart() {
+    // Only returns if restarting failed.
+    error = await call<string>("restart_app");
   }
 
   async function openWebsite() {
@@ -75,7 +92,9 @@
       <h2>{t("updateSettings")}</h2>
       <p class="version">{t("version", { v: app.version })}</p>
       <div class="buttons">
-        <button class="outline wide" onclick={() => (notice = t("updateUnavailable"))}>{t("checkUpdates")}</button>
+        <button class="outline wide" disabled={busy(app.update)} onclick={() => updateCall("check_update")}>
+          {app.update?.state === "checking" ? t("checking") : t("checkUpdates")}
+        </button>
         <button class="outline" onclick={openWebsite}>{t("officialWebsite")}</button>
       </div>
       <div class="rows">
@@ -83,7 +102,33 @@
           {@render withApp(t("autoUpdate", { app: "{app}" }))}
         </Toggle>
       </div>
-      {#if notice}<p class="notice" role="status">{notice}</p>{/if}
+      {#if app.update}
+        {@const u = app.update}
+        {#if u.state === "upToDate"}
+          <p class="notice" role="status">{t("upToDate")}</p>
+        {:else if u.state === "available"}
+          <div class="update-row" role="status">
+            <span>{t("updateAvailable", { v: u.version ?? "" })}</span>
+            <button class="solid" onclick={() => updateCall("install_update")}>
+              {u.canInstall ? t("updateNow") : t("openDownload")}
+            </button>
+          </div>
+        {:else if u.state === "downloading"}
+          <div class="update-row" role="status">
+            <span>{t("downloading", { p: String(u.progress ?? 0) })}</span>
+            <span class="progress"><span style:width="{u.progress ?? 0}%"></span></span>
+          </div>
+        {:else if u.state === "installing"}
+          <p class="notice" role="status">{t("installing")}</p>
+        {:else if u.state === "installed"}
+          <div class="update-row" role="status">
+            <span>{t("updateInstalled", { v: u.version ?? "" })}</span>
+            <button class="solid" onclick={restart}>{t("restartNow")}</button>
+          </div>
+        {:else if u.state === "failed"}
+          <p class="notice error" role="alert">{t("checkFailed", { e: u.message ?? "" })}</p>
+        {/if}
+      {/if}
     </section>
 
     <section>
@@ -228,6 +273,42 @@
     font-size: 12px;
     line-height: 17px;
     color: var(--text-muted);
+  }
+  .update-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 12px 0 0 12px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .solid {
+    height: 30px;
+    padding: 0 16px;
+    border-radius: 4px;
+    background: var(--teal);
+    color: #fff;
+    font-size: 13px;
+  }
+  .solid:hover {
+    background: #007a7a;
+  }
+  .progress {
+    width: 160px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--track);
+    overflow: hidden;
+  }
+  .progress span {
+    display: block;
+    height: 100%;
+    background: var(--teal);
+    transition: width 0.2s;
+  }
+  .outline:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
   .notice {
     margin: 12px 0 0 12px;

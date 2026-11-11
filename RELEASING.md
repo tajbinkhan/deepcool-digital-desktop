@@ -6,7 +6,7 @@ This guide is for maintainers. It explains how to publish a new version on the
 Releases are built by GitHub Actions, not on your own computer. When you push a version tag such as `v0.13.0`,
 the [release workflow](.github/workflows/release.yml):
 
-1. checks that the tag matches the version in `gui/Cargo.toml`,
+1. checks that the tag matches the version in `app/src-tauri/Cargo.toml`,
 2. runs all tests,
 3. builds the `.deb`, `.rpm`, Arch `.pkg.tar.zst` and portable `.tar.gz` packages plus `SHA256SUMS`, and
 4. attaches them to a **draft** release.
@@ -76,12 +76,14 @@ The app and the controller share one version number.
 
 ## 2. Update the version
 
-Change `version` in the `[package]` section of both manifests:
+Change `version` in the `[package]` section of these manifests:
 
 | File | Line |
 |---|---|
 | `Cargo.toml` | `version = "0.13.0"` (the controller; shown by `deepcool-digital-linux --version`) |
-| `gui/Cargo.toml` | `version = "0.13.0"` (the app; used for package names and checked against the tag) |
+| `crates/core/Cargo.toml` | `version = "0.13.0"` (drivers and sensors shared by everything) |
+| `crates/helpers/Cargo.toml` | `version = "0.13.0"` (the polkit helpers) |
+| `app/src-tauri/Cargo.toml` | `version = "0.13.0"` (the app; used for package names, shown in Settings, and checked against the tag) |
 
 Leave `xtask/Cargo.toml` alone: the packaging tool is not released.
 
@@ -91,14 +93,14 @@ Then update `Cargo.lock` so it records the new versions:
 cargo update --workspace
 ```
 
-`git diff` should now show only the two version lines and the two matching entries in `Cargo.lock`.
+`git diff` should now show only the four version lines and the four matching entries in `Cargo.lock`.
 
 ## 3. Check everything locally
 
 Run the same checks as the release workflow, plus formatting and lint:
 
 ```bash
-cargo fmt -p deepcool-digital-gui -p xtask --check
+cargo fmt -p deepcool-digital-app -p xtask --check
 ```
 
 ```bash
@@ -113,10 +115,18 @@ has some existing style warnings from upstream.
 cargo test --workspace
 ```
 
-If a DeepCool device is connected, also test the real hardware path:
+```bash
+pnpm --dir app check
+```
+
+If a DeepCool device is connected, also check live readings and the real hardware path:
 
 ```bash
-cargo build --release && cargo test -p deepcool-digital-gui -- --ignored
+cargo run -p deepcool-core --example readings
+```
+
+```bash
+cargo run -p deepcool-digital-linux -- --list
 ```
 
 Optionally, build and install the `.deb` locally and try the app. This checks the app, not the release
@@ -132,17 +142,19 @@ sudo apt install ./dist/deepcool-digital-gui_0.13.0_amd64.deb
 
 Things worth trying by hand:
 
-- the device appears, and **Start display** / **Stop display** work,
-- **Save settings** persists after restarting the app,
-- with **Keep displays running after I close this window** on, closing the window keeps the display on, and
-  opening the app from the menu brings the window back,
-- **Start this display automatically** starts the display after **Stop all and quit** and reopening,
-- **Start DeepCool Digital in the background when I sign in** starts the display after signing out and in.
+- the dashboard shows live CPU, GPU, memory, storage and network readings,
+- **Device** lists the connected device, and its settings (for example **Leading Zero Display**) change the
+  display within a second,
+- closing the window keeps the display on (with **Keep displays running after closing the window** on), and
+  opening the app from the menu or the tray icon brings the window back,
+- **Boot DeepCool Digital Auto-start** starts the display after signing out and in,
+- **CPU Power Readings** can be turned off and on (asks for the administrator password),
+- **Check for Updates** reports the latest version.
 
 ## 4. Commit and push
 
 ```bash
-git add Cargo.toml gui/Cargo.toml Cargo.lock
+git add Cargo.toml crates/core/Cargo.toml crates/helpers/Cargo.toml app/src-tauri/Cargo.toml Cargo.lock
 ```
 
 ```bash
@@ -155,7 +167,7 @@ git push origin main
 
 ## 5. Tag the release
 
-The tag is `v` followed by the exact version from `gui/Cargo.toml`. Use an annotated tag:
+The tag is `v` followed by the exact version from `app/src-tauri/Cargo.toml`. Use an annotated tag:
 
 ```bash
 git tag -a v0.13.0 -m "DeepCool Digital Desktop 0.13.0"
@@ -277,9 +289,9 @@ gh release edit v0.13.0 --repo tajbinkhan/deepcool-digital-desktop --title "Deep
 
 ## If something goes wrong
 
-#### "Tag … does not match gui/Cargo.toml version"
+#### "Tag … does not match app/src-tauri/Cargo.toml version"
 
-The tag and the version in `gui/Cargo.toml` differ. Delete the tag (below), fix the version or the tag name,
+The tag and the version in `app/src-tauri/Cargo.toml` differ. Delete the tag (below), fix the version or the tag name,
 and tag again.
 
 #### Tests or packaging fail
@@ -333,8 +345,8 @@ gh workflow run release.yml --repo tajbinkhan/deepcool-digital-desktop --ref mai
 ## Release checklist
 
 - [ ] On an up-to-date `main` with no uncommitted changes
-- [ ] Version updated in `Cargo.toml` and `gui/Cargo.toml`, and `cargo update --workspace` run
-- [ ] `cargo fmt -p deepcool-digital-gui -p xtask --check`, `cargo clippy --workspace --all-targets` (no errors) and
+- [ ] Version updated in the four manifests above, and `cargo update --workspace` run
+- [ ] `cargo fmt -p deepcool-digital-app -p xtask --check`, `cargo clippy --workspace --all-targets` (no errors) and
       `cargo test --workspace` pass
 - [ ] App tried by hand (device, start/stop, settings, background, automatic start)
 - [ ] Version commit pushed to `main`

@@ -1,11 +1,11 @@
 [workspace]
-members = [".", "crates/core", "gui", "app/src-tauri", "xtask"]
-default-members = [".", "crates/core", "gui"]
+members = [".", "crates/core", "crates/helpers", "app/src-tauri", "xtask"]
+default-members = [".", "crates/core", "crates/helpers", "app/src-tauri"]
 resolver = "2"
 
 [package]
 name = "deepcool-digital-linux"
-version = "0.15.1"
+version = "0.16.0"
 edition = "2021"
 description = "Controller for the digital displays of DeepCool CPU coolers and cases"
 license = "GPL-3.0-only"

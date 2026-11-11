@@ -8,6 +8,7 @@ mod config;
 mod dashboard;
 mod displays;
 mod power;
+mod updater;
 
 use config::{Preferences, Profile};
 use dashboard::{Dashboard, Snapshot};
@@ -33,7 +34,11 @@ struct AppState {
     dashboard: Mutex<Dashboard>,
     preferences: Mutex<Preferences>,
     system_info: OnceLock<SystemInfoView>,
+    updater: Mutex<updater::Updater>,
 }
+
+/// Set once the app has started, so background work can send events to the window.
+static APP: OnceLock<AppHandle> = OnceLock::new();
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -167,6 +172,78 @@ async fn set_cpu_power(app: AppHandle, allow: bool) -> Result<power::PowerStatus
     Ok(power::status())
 }
 
+/// The update state as the Settings page shows it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateView {
+    /// idle, checking, upToDate, available, downloading, installing, installed or failed.
+    state: &'static str,
+    version: Option<String>,
+    /// Download progress, 0–100.
+    progress: Option<u8>,
+    message: Option<String>,
+    /// False for portable copies: "update" then opens the release page.
+    can_install: bool,
+}
+
+fn update_view(updater: &mut updater::Updater) -> UpdateView {
+    use updater::State;
+    updater.poll();
+    let can_install = updater.installer.is_some();
+    let view = |state, version: Option<&str>| UpdateView {
+        state,
+        version: version.map(str::to_owned),
+        progress: None,
+        message: None,
+        can_install,
+    };
+    match &updater.state {
+        State::Idle => view("idle", None),
+        State::Checking => view("checking", None),
+        State::UpToDate => view("upToDate", None),
+        State::Available(release) => view("available", Some(&release.version)),
+        State::Downloading { release, done, total } => UpdateView {
+            progress: Some(if *total > 0 { (done * 100 / total).min(100) as u8 } else { 0 }),
+            ..view("downloading", Some(&release.version))
+        },
+        State::Installing(release) => view("installing", Some(&release.version)),
+        State::Installed(version) => view("installed", Some(version)),
+        State::Failed(message) => UpdateView { message: Some(message.clone()), ..view("failed", None) },
+    }
+}
+
+#[tauri::command]
+fn update_state(state: State<AppState>) -> UpdateView {
+    update_view(&mut lock(&state.updater))
+}
+
+#[tauri::command]
+fn check_update(state: State<AppState>) -> UpdateView {
+    let mut updater = lock(&state.updater);
+    updater.check();
+    update_view(&mut updater)
+}
+
+/// Downloads, verifies and installs the available update (asks for an administrator password).
+#[tauri::command]
+fn install_update(state: State<AppState>) -> Result<UpdateView, String> {
+    let mut updater = lock(&state.updater);
+    updater.install()?;
+    Ok(update_view(&mut updater))
+}
+
+/// Replaces this process with the newly installed version.
+#[tauri::command]
+fn restart_app(state: State<AppState>) -> String {
+    use std::os::unix::process::CommandExt;
+    state.displays.stop_all();
+    let Some(path) = updater::app_path() else {
+        return "Could not find this program. Start DeepCool Digital again yourself.".into();
+    };
+    let error = std::process::Command::new(path).exec();
+    format!("Could not restart: {error}")
+}
+
 #[tauri::command]
 fn app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -254,6 +331,24 @@ fn start_sampler(app: AppHandle) {
         .expect("failed to start the dashboard thread");
 }
 
+/// Looks for updates every few hours while automatic updates are on. Only checks:
+/// installing always waits for the user.
+fn start_update_checks(app: AppHandle) {
+    thread::Builder::new()
+        .name("updates".into())
+        .spawn(move || loop {
+            let state = app.state::<AppState>();
+            let enabled = lock(&state.preferences).check_for_updates;
+            {
+                let mut updater = lock(&state.updater);
+                updater.poll();
+                updater.maybe_check(enabled);
+            }
+            thread::sleep(Duration::from_secs(60));
+        })
+        .expect("failed to start the update thread");
+}
+
 /// Starts automatic displays and restarts them after they stop (e.g. replugging).
 fn start_keep_alive(app: AppHandle) {
     thread::Builder::new()
@@ -270,6 +365,9 @@ fn start_keep_alive(app: AppHandle) {
 }
 
 pub fn run() {
+    // Window class / Wayland app id, matching StartupWMClass in the desktop file so
+    // the dock shows the app's own icon.
+    glib::set_prgname(Some("deepcool-digital"));
     let background = std::env::args().any(|arg| arg == "--background");
     let telemetry = Arc::new(Telemetry::new(None));
     let state = AppState {
@@ -278,6 +376,11 @@ pub fn run() {
         telemetry,
         preferences: Mutex::new(config::load_preferences()),
         system_info: OnceLock::new(),
+        updater: Mutex::new(updater::Updater::new(Arc::new(|| {
+            if let Some(app) = APP.get() {
+                let _ = app.emit("update-changed", ());
+            }
+        }))),
     };
     if background && !state.displays.has_work() {
         // Started at sign-in with nothing to run.
@@ -301,13 +404,19 @@ pub fn run() {
             open_website,
             cpu_power_status,
             set_cpu_power,
+            update_state,
+            check_update,
+            install_update,
+            restart_app,
         ])
         .setup(move |app| {
+            let _ = APP.set(app.handle().clone());
             if let Err(err) = build_tray(app.handle()) {
                 eprintln!("Tray icon unavailable: {err}");
             }
             start_sampler(app.handle().clone());
             start_keep_alive(app.handle().clone());
+            start_update_checks(app.handle().clone());
             if !background {
                 show_window(app.handle());
             }

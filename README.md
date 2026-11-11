@@ -34,14 +34,17 @@ when you sign in. Everything is written in Rust.
 
 ## Features
 
-- **Desktop app** with device discovery, per-device settings and a live activity log. No terminal needed.
-- **Only valid choices**: display modes, rotation, °F, alarm and leading zeros are shown only where the
+- **Desktop app** with a live dashboard (CPU and GPU load, temperature, clock and power; memory, storage
+  and network), your computer's hardware details, and per-device settings with a live preview of the
+  display. Seven languages. No terminal needed.
+- **Only valid choices**: display modes, rotation, alarm and leading zeros are shown only where the
   selected device supports them.
 - **Runs in the background**: closing the window keeps your displays running. A tray icon brings the window
   back or quits the app; only one copy ever runs.
-- **Starts automatically**: mark a display to start with its saved settings, and have the app start without
-  a window when you sign in. Displays that stop unexpectedly (for example after being unplugged) are retried.
-- **CPU power on the display**: one button (with your administrator password) lets the display show CPU
+- **Starts automatically**: connected devices show readings as soon as the app runs, and the app can start
+  without a window when you sign in. Displays that stop unexpectedly (for example after being unplugged)
+  are retried.
+- **CPU power on the display**: one switch (with your administrator password) lets the display show CPU
   watts on systems that restrict the CPU energy counter.
 - **Updates from inside the app**: the app tells you when a new version is out, then downloads it, verifies
   its checksum and installs it with your administrator password. Then select **Restart now**.
@@ -77,8 +80,8 @@ Device support comes from the controller of the original project.
 
 ✅ Fully supported · ✔️ Partially supported (some display modes are unavailable on the device)
 
-The MYSTIQUE series (LCD screens) is not supported. If your device is missing, run the app anyway and select
-**Refresh devices**: it may still be detected. USB IDs and display mappings are documented in
+The MYSTIQUE series (LCD screens) is not supported. If your device is missing, run the app anyway and open
+**Device**: it may still be detected (the list refreshes every few seconds). USB IDs and display mappings are documented in
 [device-list](device-list/README.md).
 
 ## Install
@@ -119,35 +122,34 @@ The packages install:
 | `/usr/lib/deepcool-digital/deepcool-digital-update` | Helper the app uses to [install updates](#updates) |
 | `/usr/lib/udev/rules.d/70-deepcool-digital.rules` | Gives your desktop session access to DeepCool USB devices |
 
-Requirements: a graphical Linux desktop (Wayland or X11) with OpenGL. No Python, GTK or other runtime is
-needed.
+Requirements: a graphical Linux desktop (Wayland or X11). The `.deb`, `.rpm` and Arch packages install the
+WebKitGTK and tray icon libraries the window needs; the portable `.tar.gz` expects them to be installed
+already (`libwebkit2gtk-4.1` and `libayatana-appindicator3`).
 
 ## Set up the app
 
 1. Open **DeepCool Digital** from your app menu. Do not run it as root.
-2. Your device appears in the list. If it doesn't, unplug and reconnect it once (so the new USB rule applies)
-   and select **Refresh devices**.
-3. Choose the **display mode** and other options. Controls the device doesn't support are disabled.
-4. Select **Save settings**, then **Start display**.
+2. The **Dashboard** shows live readings. Select **Device** in the left bar: your device is listed. If it
+   isn't, unplug and reconnect it once so the new USB rule applies.
+3. The device starts showing readings right away. Select it to change its settings, such as the display
+   mode or **Leading Zero Display**; changes apply within a second, and the preview shows what the display
+   shows. **Show readings on this device** turns the display off and on.
 
-To change settings while a display is running, select **Stop display**, change them, then **Start display**
-again. If you have several devices, select each one in turn and start it.
-
-Settings are saved per device in `~/.config/deepcool-digital/settings.json`. The activity log is kept in
-`~/.local/state/deepcool-digital/activity.log`.
+Settings are saved per device in `~/.config/deepcool-digital/settings.json`; settings from earlier versions
+are kept. The temperature unit (°C or °F) and the language are chosen in **Settings** and apply to every
+device.
 
 ## Run in the background and at sign-in
 
-The **Automatic start** section of the window controls this:
+These are in **Settings**:
 
 | Setting | What it does |
 |---|---|
-| **Start this display automatically** | Per device. Starts the display with its saved settings whenever the app is running, and retries every 15 seconds if it stops unexpectedly. **Stop display** pauses this for that device until you select **Start display** again. |
-| **Keep displays running after I close this window** | On by default. Closing the window leaves the app running without a window. Click its icon in the top bar (or open **DeepCool Digital** from the app menu) to show it again. **Stop all and quit** stops everything and exits. |
-| **Start DeepCool Digital in the background when I sign in** | Starts the app without a window when you sign in, which then starts the displays marked to start automatically. |
+| **Boot DeepCool Digital Auto-start** | Starts the app without a window when you sign in, which then starts your displays. |
+| **Keep displays running after closing the window** | On by default. Closing the window leaves the app running in the tray, using little memory. Click its tray icon (or open **DeepCool Digital** from the app menu) to show it again. |
 
-For displays that come on by themselves after every restart, turn on **Start this display automatically**
-and **Start DeepCool Digital in the background when I sign in**.
+Each device's **Show readings on this device** switch decides whether that device runs. A display that
+stops unexpectedly (for example after unplugging) is started again within about 15 seconds.
 
 The app starts when your desktop session starts. If your system signs you in automatically, that is at
 boot. It runs as your user rather than as a system service, because the USB rules give access to the
@@ -160,7 +162,7 @@ The sign-in entry is the file `~/.config/autostart/deepcool-digital.desktop`. It
 ### Tray icon
 
 While the app runs, with or without its window, its icon is in the system tray (the top bar on GNOME, the
-panel on KDE and others). Hover over it to see how many displays are running.
+panel on KDE and others).
 
 - **Left click** or **Open DeepCool Digital** shows the window.
 - **Stop displays and quit** stops every display and exits the app.
@@ -172,8 +174,8 @@ extension; without it the app still runs in the background, and you can open it 
 
 ## Command-line controller
 
-The controller from the original project is installed as `deepcool-digital-linux`. The desktop app uses it
-behind the scenes, and you can use it directly in scripts.
+The controller from the original project is installed as `deepcool-digital-linux`, for scripts and system
+services. The desktop app doesn't need it: it drives the displays itself, with the same device code.
 
 ```
 Usage: deepcool-digital-linux [OPTIONS]
@@ -283,20 +285,19 @@ original project; see its [README](https://github.com/Nortank12/deepcool-digital
 
 Displays that show CPU power (watts) need to read the CPU's energy counter, for example
 `/sys/class/powercap/intel-rapl:0/energy_uj`. Most distributions let only root read it, so by default the
-display shows 0 W. The **CPU power** section of the app tells you which case applies:
+display shows 0 W and the app shows "--".
 
-- **CPU power readings are available**: nothing to do.
-- **Only administrators can read the CPU energy counter**: select **Allow CPU power readings…** and enter
-  your administrator password. The app makes the counter readable now and after every restart, and restarts
-  running displays so they show CPU power. **Turn off** in the same place restores the default.
-- **No supported CPU energy sensor**: your kernel exposes none of the supported counters (`intel_rapl`,
-  `amd_energy` or `zenergy`), so CPU power can't be shown.
+When that is the case, the dashboard shows **Allow** next to CPU Power. Select it (or turn on **Show CPU
+power** under **CPU Power Readings** in **Settings**) and enter your administrator password. The app makes
+the counter readable now and after every restart, and readings start within a second. Turning the switch
+off restores the default. If your kernel exposes none of the supported counters (`intel_rapl`, `amd_energy`
+or `zenergy`), Settings says so and CPU power can't be shown.
 
 Allowing it makes the energy counter readable by every user on the computer. Linux restricts it because
 precise energy readings have been used in side-channel attacks
 ([CVE-2020-8694](https://nvd.nist.gov/vuln/detail/CVE-2020-8694)); on a personal computer the risk is low.
 
-Behind the button, the helper `/usr/lib/deepcool-digital/deepcool-digital-cpu-power` runs as root through
+Behind the switch, the helper `/usr/lib/deepcool-digital/deepcool-digital-cpu-power` runs as root through
 polkit. It writes `/etc/udev/rules.d/71-deepcool-digital-cpu-power.rules` and changes the counters'
 permissions. Uninstalling the `.deb` or `.rpm` removes that rule. Without polkit (or from the portable
 build), run it yourself:
@@ -309,24 +310,21 @@ Use `disable` to undo it, or `status` to check.
 
 ## Updates
 
-The app's version number is shown at the top of the window and in the **Updates** section.
+The app's version number is shown in **Settings**, under **Update Settings**.
 
-With **Check for updates automatically** on (the default), the app asks GitHub for the latest release when
-the window opens and every six hours while it stays open. It doesn't check while running in the background
-without a window. You can also select **Check for updates** at any time.
-
-When a newer version is available, a banner appears at the top of the window:
+With **Automatic DeepCool Digital Update** on (the default), the app asks GitHub for the latest release when
+it starts and every six hours. It never installs anything without you. You can also select **Check for
+Updates** at any time. When a newer version is available, a red dot appears on the Settings icon:
 
 1. Select **Update now**. The app downloads the package for your system (`.deb`, `.rpm` or Arch) and checks
    it against the release's `SHA256SUMS`.
 2. Enter your administrator password. The helper
    `/usr/lib/deepcool-digital/deepcool-digital-update` installs it with your package manager (`apt`, `dnf`,
    `zypper` or `pacman`). It only installs the DeepCool Digital package.
-3. Select **Restart now**. The new version starts, and displays that were running start again.
+3. Select **Restart now**. The new version starts, and your displays start again.
 
-**What's new** opens the release notes. Portable and source builds can't update themselves; for those,
-**Download…** opens the release page. Downloads are kept in `~/.cache/deepcool-digital/updates` until the
-update is installed.
+Portable and source builds can't update themselves; for those, **Open download page** opens the release
+page. Downloads are kept in `~/.cache/deepcool-digital/updates` until the update is installed.
 
 ## Build from source
 
@@ -334,22 +332,25 @@ The repository is a Cargo workspace:
 
 | Folder | Contents |
 |---|---|
-| `src/` | The device controller (`deepcool-digital-linux`), from the original project |
-| `gui/` | The desktop app (`deepcool-digital-gui`), built with [egui](https://github.com/emilk/egui) |
+| `crates/core/` | Device drivers and sensor readers, shared by the app and the controller |
+| `crates/helpers/` | Small helpers the app runs as root through polkit (CPU power access, installing updates) |
+| `src/` | The command-line controller (`deepcool-digital-linux`), from the original project |
+| `app/` | The desktop app: a [Tauri](https://tauri.app) backend in `app/src-tauri/` and a Svelte interface in `app/src/` |
 | `xtask/` | The packaging tool, run as `cargo xtask package` |
 | `packaging/` | udev rules, desktop entry, icon and install script used by the packages |
 | `device-list/` | USB IDs and display mappings for each device family |
 
 ### 1. Install the build dependencies
 
-You need [Rust](https://rustup.rs/) (stable), a C toolchain, `pkg-config` and the libudev headers. The desktop
-app needs no extra development libraries.
+You need [Rust](https://rustup.rs/) (stable), a C toolchain, `pkg-config`, the libudev headers, the WebKitGTK
+and tray icon development libraries, and [Node.js](https://nodejs.org/) 22.12 or newer with
+[pnpm](https://pnpm.io/) for the app's interface.
 
 <details>
 <summary><b>Debian / Ubuntu</b></summary>
 
 ```bash
-sudo apt install build-essential pkg-config libudev-dev curl
+sudo apt install build-essential pkg-config libudev-dev curl libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 ```
 
 ```bash
@@ -362,7 +363,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 <summary><b>Fedora</b></summary>
 
 ```bash
-sudo dnf install gcc pkgconf-pkg-config systemd-devel rustup
+sudo dnf install gcc pkgconf-pkg-config systemd-devel rustup webkit2gtk4.1-devel libayatana-appindicator-gtk3-devel librsvg2-devel
 ```
 
 ```bash
@@ -375,7 +376,7 @@ rustup-init
 <summary><b>Arch Linux</b></summary>
 
 ```bash
-sudo pacman -S base-devel rustup
+sudo pacman -S base-devel rustup webkit2gtk-4.1 libayatana-appindicator librsvg
 ```
 
 ```bash
@@ -395,15 +396,21 @@ cd deepcool-digital-desktop
 ```
 
 ```bash
-cargo build --release
+pnpm --dir app install && pnpm --dir app build
 ```
 
 ```bash
-./target/release/deepcool-digital-gui
+cargo build --release --features deepcool-digital-app/custom-protocol
 ```
 
-The app looks for the controller next to its own executable, so both binaries in `target/release/` work
-together. To use the USB device without root when running from source, install the rules once:
+```bash
+./target/release/deepcool-digital-app
+```
+
+To work on the interface with live reload, run `pnpm --dir app tauri dev` instead. In a plain browser
+(`pnpm --dir app dev`, then open http://localhost:1420) the interface shows sample data.
+
+To use the USB device without root when running from source, install the rules once:
 
 ```bash
 sudo cp packaging/70-deepcool-digital.rules /usr/lib/udev/rules.d/ && sudo udevadm control --reload-rules
@@ -417,10 +424,14 @@ Then unplug and reconnect the device.
 cargo test --workspace
 ```
 
-With a supported device connected, this starts and stops the real display through the app:
+```bash
+pnpm --dir app check
+```
+
+With a supported device connected, this prints live readings:
 
 ```bash
-cargo test -p deepcool-digital-gui -- --ignored
+cargo run -p deepcool-core --example readings
 ```
 
 ### 4. Build packages
@@ -441,7 +452,7 @@ and `appimage`, and the default is `deb,rpm,arch,tar`. They need these tools:
 | `appimage` | `mksquashfs` and the official [type2 runtime](https://github.com/AppImage/type2-runtime/releases), passed with `--runtime <path>` |
 
 Packages use the build machine's architecture and its glibc version as the minimum. Build on the oldest
-distribution you want to support. The package version comes from `gui/Cargo.toml`.
+distribution you want to support. The package version comes from `app/src-tauri/Cargo.toml`.
 
 More details about the app, packaging and test hooks are in [GUI.md](GUI.md).
 
@@ -449,7 +460,7 @@ More details about the app, packaging and test hooks are in [GUI.md](GUI.md).
 
 #### The app says USB access is denied, or no device is found
 
-- Unplug and reconnect the device, then select **Refresh devices**.
+- Unplug and reconnect the device; the **Device** page refreshes on its own within a few seconds.
 - Check that the rule is installed: `/usr/lib/udev/rules.d/70-deepcool-digital.rules`. Portable builds and
   source builds need it installed manually (see [Build and run](#2-build-and-run)).
 - The rule gives access to the signed-in desktop session. Over SSH or on a system without systemd-logind,
@@ -462,18 +473,23 @@ Another program may also be driving it. Stop any `deepcool-digital` system servi
 
 #### CPU power shows 0 W
 
-Use **Allow CPU power readings…** in the app; see [CPU power readings](#cpu-power-readings). If the
+Select **Allow** next to CPU Power on the dashboard; see [CPU power readings](#cpu-power-readings). If the
 password prompt doesn't appear, check that polkit is installed (`pkexec` on Debian and Ubuntu).
+
+#### The tray icon's menu is empty or missing
+
+On GNOME, make sure only one AppIndicator extension is enabled: Ubuntu ships **Ubuntu AppIndicators**, and
+installing **AppIndicator and KStatusNotifierItem Support** as well runs the same code twice.
 
 #### Where are the logs?
 
-`~/.local/state/deepcool-digital/activity.log`. The last two older logs are kept as `activity.log.1` and
-`activity.log.2`.
+Problems with a device are shown on its page in the app. For more detail, start the app from a terminal
+(`deepcool-digital-gui`) and watch its output.
 
 ## Contributing
 
 Bug reports and pull requests are welcome. When reporting a device problem, include the output of
-`deepcool-digital-linux --list` and the relevant part of the activity log. Support for new devices
+`deepcool-digital-linux --list` and any error the app shows. Support for new devices
 belongs in the controller (`src/`); consider sending it to the
 [original project](https://github.com/Nortank12/deepcool-digital-linux) as well, so everyone benefits.
 

@@ -1,6 +1,6 @@
 // App-wide state shared by all pages.
 
-import { call, listen, type Device, type PowerStatus, type Preferences, type Snapshot } from "./api";
+import { call, listen, type Device, type PowerStatus, type Preferences, type Snapshot, type UpdateView } from "./api";
 import { resolveLang, translate, type Key, type Lang } from "./i18n";
 
 export type Page = "dashboard" | "computer" | "device" | "settings";
@@ -18,6 +18,7 @@ export const app = $state({
   /** True while the administrator password prompt for CPU power is open. */
   powerBusy: false,
   powerError: null as string | null,
+  update: null as UpdateView | null,
 });
 
 export function t(key: Key, vars: Record<string, string> = {}): string {
@@ -39,6 +40,10 @@ export async function savePrefs(changes: Partial<Preferences>) {
   app.prefs = next;
   if (changes.language !== undefined) app.lang = resolveLang(next.language);
   await call("set_preferences", { preferences: next });
+}
+
+export async function refreshUpdate() {
+  app.update = await call<UpdateView>("update_state");
 }
 
 export async function refreshPower() {
@@ -73,7 +78,8 @@ export async function init() {
   document.documentElement.lang = app.lang;
   await listen<Snapshot>("telemetry", (s) => (app.snapshot = s));
   await listen("devices-changed", () => refreshDevices());
-  await Promise.all([refreshDevices(), refreshPower()]);
+  await listen("update-changed", () => refreshUpdate());
+  await Promise.all([refreshDevices(), refreshPower(), refreshUpdate()]);
   // Devices can be plugged in at any time; check now and then while the window is open.
   setInterval(refreshDevices, 5000);
 }

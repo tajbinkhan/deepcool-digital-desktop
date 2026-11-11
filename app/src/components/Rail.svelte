@@ -15,6 +15,7 @@
     onclick={() => go(page)}
   >
     <Icon name={page} size={22} stroke={1.4} />
+    {#if page === "settings" && app.update?.state === "available"}<span class="badge" aria-hidden="true"></span>{/if}
   </button>
 {/snippet}
 
@@ -64,6 +65,15 @@
     width: 2px;
     height: 12px;
     background: var(--teal);
+  }
+  .badge {
+    position: absolute;
+    top: -2px;
+    left: 34px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
   }
   .bottom hr {
     border: 0;

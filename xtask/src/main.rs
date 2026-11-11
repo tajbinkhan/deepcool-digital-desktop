@@ -16,11 +16,13 @@ use std::{
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 
 const NAME: &str = "deepcool-digital-gui";
-const BINARIES: [&str; 4] = [
-    "deepcool-digital-gui",
-    "deepcool-digital-linux",
-    "deepcool-digital-cpu-power",
-    "deepcool-digital-update",
+/// (built file in target/release, installed name). The desktop app keeps the
+/// `deepcool-digital-gui` name so sign-in entries and the updater keep working.
+const BINARIES: [(&str, &str); 4] = [
+    ("deepcool-digital-app", "deepcool-digital-gui"),
+    ("deepcool-digital-linux", "deepcool-digital-linux"),
+    ("deepcool-digital-cpu-power", "deepcool-digital-cpu-power"),
+    ("deepcool-digital-update", "deepcool-digital-update"),
 ];
 /// Binaries also linked into /usr/bin; the helpers are only run by the app, through polkit.
 const COMMANDS: [&str; 2] = ["deepcool-digital-gui", "deepcool-digital-linux"];
@@ -38,33 +40,12 @@ Options:
   --skip-build       Package the existing release binaries without running cargo build
   -h, --help         Print help";
 
-// The window loads these with dlopen, so package tools cannot detect them.
-// OpenGL/EGL draws the window; the rest covers Wayland and X11 sessions.
-const DEB_RUNTIME: &str = "libegl1, libgl1, libwayland-client0, libwayland-egl1, libx11-6, libx11-xcb1, \
-                           libxcursor1, libxi6, libxkbcommon0, libxkbcommon-x11-0, libxrender1";
-const RPM_RUNTIME: [&str; 11] = [
-    "libEGL.so.1",
-    "libGL.so.1",
-    "libwayland-client.so.0",
-    "libwayland-egl.so.1",
-    "libX11.so.6",
-    "libX11-xcb.so.1",
-    "libXcursor.so.1",
-    "libXi.so.6",
-    "libxkbcommon.so.0",
-    "libxkbcommon-x11.so.0",
-    "libXrender.so.1",
-];
-const ARCH_RUNTIME: [&str; 8] = [
-    "libglvnd",
-    "wayland",
-    "libx11",
-    "libxcursor",
-    "libxi",
-    "libxkbcommon",
-    "libxkbcommon-x11",
-    "libxrender",
-];
+// The tray icon library is loaded with dlopen, so package tools cannot detect it.
+// The web view (WebKitGTK) and GTK are linked normally and found automatically for
+// .deb and .rpm; Arch packages list everything by hand.
+const DEB_RUNTIME: &str = "libayatana-appindicator3-1";
+const RPM_RUNTIME: [&str; 1] = ["libayatana-appindicator3.so.1"];
+const ARCH_RUNTIME: [&str; 4] = ["webkit2gtk-4.1", "gtk3", "libsoup3", "libayatana-appindicator"];
 
 struct Options {
     formats: Vec<String>,
@@ -223,7 +204,7 @@ impl Packager {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
         let machine = std::env::consts::ARCH;
         Ok(Packager {
-            version: package_version(&root.join("gui/Cargo.toml"))?,
+            version: package_version(&root.join("app/src-tauri/Cargo.toml"))?,
             out: root.join("dist"),
             build: root.join("build/packages"),
             arch: match machine {
@@ -244,7 +225,20 @@ impl Packager {
             );
         }
         if !options.skip_build {
-            let packages = ["-p", "deepcool-digital-linux", "-p", "deepcool-digital-gui"];
+            // The app embeds its built web frontend (app/dist).
+            let app = self.root.join("app");
+            run("pnpm", &[&"install", &"--frozen-lockfile"], Some(&app))?;
+            run("pnpm", &[&"build"], Some(&app))?;
+            let packages = [
+                "-p",
+                "deepcool-digital-linux",
+                "-p",
+                "deepcool-digital-helpers",
+                "-p",
+                "deepcool-digital-app",
+                "--features",
+                "deepcool-digital-app/custom-protocol",
+            ];
             let mut args: Vec<&dyn AsRef<std::ffi::OsStr>> = vec![&"build", &"--release", &"--locked"];
             args.extend(packages.iter().map(|arg| arg as &dyn AsRef<std::ffi::OsStr>));
             run(env!("CARGO"), &args, Some(&self.root))?;
@@ -277,8 +271,8 @@ impl Packager {
         let stage = self.build.join("root");
         let app = stage.join("usr/lib/deepcool-digital");
         // The GUI finds the controller next to its own resolved path.
-        for name in BINARIES {
-            copy(&self.root.join("target/release").join(name), &app.join(name))?;
+        for (built, name) in BINARIES {
+            copy(&self.root.join("target/release").join(built), &app.join(name))?;
         }
         for name in COMMANDS {
             let link = stage.join("usr/bin").join(name);
@@ -338,7 +332,7 @@ impl Packager {
         )?;
         let binaries: Vec<PathBuf> = BINARIES
             .iter()
-            .map(|name| stage.join("usr/lib/deepcool-digital").join(name))
+            .map(|(_, name)| stage.join("usr/lib/deepcool-digital").join(name))
             .collect();
         let output = Command::new("dpkg-shlibdeps")
             .args(["--ignore-missing-info", "-O"])

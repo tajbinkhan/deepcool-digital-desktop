@@ -45,7 +45,10 @@ const en = {
   cpuPowerNoSensor: "This computer has no supported CPU energy counter, so CPU power cannot be shown.",
   cpuPowerExternal: "CPU power is readable on this computer (set up outside this app).",
   cpuPowerUnavailable: "CPU power needs permission. Select Allow to turn it on.",
-  upToDate: "You have the latest version.", updateUnavailable: "Update checks are not available in this build yet.",
+  checking: "Checking…", updateAvailable: "Version {v} is available.", updateNow: "Update now",
+  openDownload: "Open download page", downloading: "Downloading… {p}%", installing: "Installing the update…",
+  updateInstalled: "Version {v} is installed.", restartNow: "Restart now", checkFailed: "Could not check for updates: {e}",
+  upToDate: "You have the latest version.",
 };
 
 export type Key = keyof typeof en;
@@ -81,11 +84,13 @@ const de: Dict = {
   cpuPowerNoSensor: "Dieser Computer hat keinen unterstützten CPU-Energiezähler, daher kann die CPU-Leistung nicht angezeigt werden.",
   cpuPowerExternal: "Die CPU-Leistung ist auf diesem Computer lesbar (außerhalb dieser App eingerichtet).",
   cpuPowerUnavailable: "Für die CPU-Leistung ist eine Berechtigung nötig. Wählen Sie „Erlauben“.",
+  checking: "Wird geprüft…", updateAvailable: "Version {v} ist verfügbar.", updateNow: "Jetzt aktualisieren",
+  openDownload: "Download-Seite öffnen", downloading: "Wird heruntergeladen… {p}%", installing: "Update wird installiert…",
+  updateInstalled: "Version {v} ist installiert.", restartNow: "Jetzt neu starten", checkFailed: "Suche nach Updates fehlgeschlagen: {e}",
   keepRunning: "Anzeigen nach dem Schließen des Fensters weiterlaufen lassen",
   tempDisplay: "Temperaturanzeige", language: "Sprache", updateSettings: "Update-Einstellungen",
   version: "Version : {v}", checkUpdates: "Nach Updates suchen", officialWebsite: "Offizielle Website",
   autoUpdate: "{app} automatisch aktualisieren", upToDate: "Sie verwenden die neueste Version.",
-  updateUnavailable: "Die Update-Suche ist in dieser Version noch nicht verfügbar.",
 };
 
 const es: Dict = {
@@ -119,11 +124,13 @@ const es: Dict = {
   cpuPowerNoSensor: "Este equipo no tiene un contador de energía de CPU compatible, así que no se puede mostrar la potencia.",
   cpuPowerExternal: "La potencia de la CPU se puede leer en este equipo (configurado fuera de esta aplicación).",
   cpuPowerUnavailable: "La potencia de la CPU necesita permiso. Selecciona Permitir para activarla.",
+  checking: "Comprobando…", updateAvailable: "La versión {v} está disponible.", updateNow: "Actualizar ahora",
+  openDownload: "Abrir página de descarga", downloading: "Descargando… {p}%", installing: "Instalando la actualización…",
+  updateInstalled: "La versión {v} está instalada.", restartNow: "Reiniciar ahora", checkFailed: "No se pudieron buscar actualizaciones: {e}",
   keepRunning: "Mantener las pantallas activas al cerrar la ventana",
   tempDisplay: "Unidad de temperatura", language: "Idioma", updateSettings: "Ajustes de actualización",
   version: "Versión : {v}", checkUpdates: "Buscar actualizaciones", officialWebsite: "Sitio web oficial",
   autoUpdate: "Actualizar {app} automáticamente", upToDate: "Tiene la versión más reciente.",
-  updateUnavailable: "La búsqueda de actualizaciones aún no está disponible en esta versión.",
 };
 
 const fr: Dict = {
@@ -157,11 +164,13 @@ const fr: Dict = {
   cpuPowerNoSensor: "Cet ordinateur n'a pas de compteur d'énergie CPU pris en charge ; la puissance ne peut pas être affichée.",
   cpuPowerExternal: "La puissance du CPU est lisible sur cet ordinateur (configuré en dehors de cette application).",
   cpuPowerUnavailable: "La puissance du CPU nécessite une autorisation. Choisissez Autoriser pour l'activer.",
+  checking: "Vérification…", updateAvailable: "La version {v} est disponible.", updateNow: "Mettre à jour",
+  openDownload: "Ouvrir la page de téléchargement", downloading: "Téléchargement… {p} %", installing: "Installation de la mise à jour…",
+  updateInstalled: "La version {v} est installée.", restartNow: "Redémarrer", checkFailed: "Impossible de rechercher des mises à jour : {e}",
   keepRunning: "Garder les écrans actifs après la fermeture de la fenêtre",
   tempDisplay: "Unité de température", language: "Langue", updateSettings: "Mises à jour",
   version: "Version : {v}", checkUpdates: "Rechercher des mises à jour", officialWebsite: "Site officiel",
   autoUpdate: "Mettre à jour {app} automatiquement", upToDate: "Vous avez la dernière version.",
-  updateUnavailable: "La recherche de mises à jour n'est pas encore disponible dans cette version.",
 };
 
 const it: Dict = {
@@ -195,11 +204,13 @@ const it: Dict = {
   cpuPowerNoSensor: "Questo computer non ha un contatore di energia CPU supportato, quindi la potenza non può essere mostrata.",
   cpuPowerExternal: "La potenza della CPU è leggibile su questo computer (configurato al di fuori di questa app).",
   cpuPowerUnavailable: "La potenza della CPU richiede un'autorizzazione. Seleziona Consenti per attivarla.",
+  checking: "Verifica in corso…", updateAvailable: "È disponibile la versione {v}.", updateNow: "Aggiorna ora",
+  openDownload: "Apri la pagina di download", downloading: "Download in corso… {p}%", installing: "Installazione dell'aggiornamento…",
+  updateInstalled: "La versione {v} è installata.", restartNow: "Riavvia ora", checkFailed: "Impossibile cercare aggiornamenti: {e}",
   keepRunning: "Mantieni attivi i display dopo la chiusura della finestra",
   tempDisplay: "Unità di temperatura", language: "Lingua", updateSettings: "Impostazioni di aggiornamento",
   version: "Versione : {v}", checkUpdates: "Cerca aggiornamenti", officialWebsite: "Sito ufficiale",
   autoUpdate: "Aggiorna {app} automaticamente", upToDate: "Hai la versione più recente.",
-  updateUnavailable: "La ricerca degli aggiornamenti non è ancora disponibile in questa versione.",
 };
 
 const pt: Dict = {
@@ -233,11 +244,13 @@ const pt: Dict = {
   cpuPowerNoSensor: "Este computador não tem um contador de energia da CPU compatível, então a potência não pode ser exibida.",
   cpuPowerExternal: "A potência da CPU pode ser lida neste computador (configurado fora deste app).",
   cpuPowerUnavailable: "A potência da CPU precisa de permissão. Selecione Permitir para ativá-la.",
+  checking: "Verificando…", updateAvailable: "A versão {v} está disponível.", updateNow: "Atualizar agora",
+  openDownload: "Abrir página de download", downloading: "Baixando… {p}%", installing: "Instalando a atualização…",
+  updateInstalled: "A versão {v} está instalada.", restartNow: "Reiniciar agora", checkFailed: "Não foi possível verificar atualizações: {e}",
   keepRunning: "Manter os displays ativos após fechar a janela",
   tempDisplay: "Unidade de temperatura", language: "Idioma", updateSettings: "Configurações de atualização",
   version: "Versão : {v}", checkUpdates: "Verificar atualizações", officialWebsite: "Site oficial",
   autoUpdate: "Atualizar o {app} automaticamente", upToDate: "Você tem a versão mais recente.",
-  updateUnavailable: "A verificação de atualizações ainda não está disponível nesta versão.",
 };
 
 const ru: Dict = {
@@ -271,11 +284,14 @@ const ru: Dict = {
   cpuPowerNoSensor: "На этом компьютере нет поддерживаемого счётчика энергии ЦП, поэтому мощность показать нельзя.",
   cpuPowerExternal: "Мощность ЦП доступна на этом компьютере (настроено вне этого приложения).",
   cpuPowerUnavailable: "Для мощности ЦП нужно разрешение. Нажмите «Разрешить».",
+  checking: "Проверка…", updateAvailable: "Доступна версия {v}.", updateNow: "Обновить",
+  openDownload: "Открыть страницу загрузки", downloading: "Загрузка… {p}%", installing: "Установка обновления…",
+  updateInstalled: "Версия {v} установлена.", restartNow: "Перезапустить", checkFailed: "Не удалось проверить обновления: {e}",
   keepRunning: "Не выключать дисплеи после закрытия окна",
   tempDisplay: "Единицы температуры", celsius: "Цельсий ℃", fahrenheitUnit: "Фаренгейт ℉", language: "Язык",
   updateSettings: "Обновления", version: "Версия : {v}", checkUpdates: "Проверить обновления",
   officialWebsite: "Официальный сайт", autoUpdate: "Автоматически обновлять {app}",
-  upToDate: "У вас последняя версия.", updateUnavailable: "Проверка обновлений пока недоступна в этой версии.",
+  upToDate: "У вас последняя версия.",
 };
 
 const dictionaries: Record<Lang, Dict> = { en, de, es, fr, it, pt, ru };

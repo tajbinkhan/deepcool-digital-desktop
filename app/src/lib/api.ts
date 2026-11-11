@@ -32,6 +32,10 @@ export interface Device {
   capabilities: Capabilities | null; running: boolean; error: string | null; profile: Profile;
 }
 export interface PowerStatus { access: "readable" | "restricted" | "no_sensor"; ruleInstalled: boolean }
+export interface UpdateView {
+  state: "idle" | "checking" | "upToDate" | "available" | "downloading" | "installing" | "installed" | "failed";
+  version: string | null; progress: number | null; message: string | null; canInstall: boolean;
+}
 export interface Preferences {
   run_in_background: boolean; check_for_updates: boolean; fahrenheit: boolean; language: string; start_at_login: boolean;
 }
@@ -43,6 +47,7 @@ const GB = 1024 ** 3;
 const mock = {
   gpu: 1,
   power: { access: "restricted", ruleInstalled: false } as PowerStatus,
+  update: { state: "idle", version: null, progress: null, message: null, canInstall: true } as UpdateView,
   prefs: { run_in_background: true, check_for_updates: true, fahrenheit: false, language: "", start_at_login: true } as Preferences,
   profile: { mode: "Device default", secondary: "Device default", rotate: 0, fahrenheit: false, alarm: false, zeros: true, update: 1000, gpuid: "", autostart: true } as Profile,
   snapshot(): Snapshot {
@@ -82,6 +87,10 @@ async function mockInvoke<T>(cmd: string, args: Record<string, unknown> = {}): P
     app_version: () => "0.16.0",
     open_website: () => null,
     cpu_power_status: () => mock.power,
+    update_state: () => mock.update,
+    check_update: () => (mock.update = { ...mock.update, state: "available", version: "0.17.0" }),
+    install_update: () => (mock.update = { ...mock.update, state: "installed" }),
+    restart_app: () => "",
     set_cpu_power: () => {
       const allow = args.allow as boolean;
       mock.power = { access: allow ? "readable" : "restricted", ruleInstalled: allow };
